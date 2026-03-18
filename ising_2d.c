@@ -34,13 +34,14 @@ void Initialize(int N, int**config){
 
 void MC_move(int N, int**config, double beta){
     int i, j, spin, rx, ry, neigh_sum, cost;
+    
 
     for (i=0; i<N; i++){
         for (j=0; j<N; j++){
             rx = rand()%N;
             ry=  rand()%N;
             spin = config[rx][ry];
-            neigh_sum = config[(rx-1)%N][ry] + config[(rx+1)%N][ry] + config[rx][(ry-1)%N] + config[rx][(ry+1)%N];
+            neigh_sum = config[(rx-1+N)%N][ry] + config[(rx+1)%N][ry] + config[rx][(ry-1+N)%N] + config[rx][(ry+1)%N];
             cost = 2*spin*neigh_sum;
             if (cost<0){
                 spin*=-1;
