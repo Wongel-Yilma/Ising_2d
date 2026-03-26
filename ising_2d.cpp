@@ -24,16 +24,19 @@ public:
         N = lattice_size;
         temp = boltzmann_temp;
         config  = new int[N*N];
+        fp.open(file_name, std::ios::out);
+
     }
     ~Ising (){
-        delete[] config;
         fp.close();
+        delete[] config;
     }
     // void Read_input(){
 
     // }
 
     void Initialize(){
+        step=0;
         int row,col;
         for ( row=0; row<N; row++){
             for ( col=0; col<N; col++){
@@ -73,7 +76,7 @@ public:
                 total_energy+= -neigh_sum*spin;
             }
         }
-        total_energy/=4;
+        total_energy/=2;
         return total_energy;
     }
     double Calculate_magnetization(){
@@ -86,13 +89,12 @@ public:
     }
 
     void Dump(){
-        if (first_dump_write){
-            fp.open(file_name, std::ios::out);
-            first_dump_write=false;
-        }
-        else {
-            fp.open(file_name, std::ios::app);
-        }
+        // if (first_dump_write){
+        //     first_dump_write=false;
+        // }
+        // else {
+        //     fp.open(file_name, std::ios::app);
+        // }
 
         // Writing the header
         fp<<"ITEM: TIMESTEP\n";
@@ -109,9 +111,9 @@ public:
         for (i=0; i<N*N;i++){
             fp<< i<<" "<<1<<" "<<i/N<<" "<<i%N<<" "<<0<<" "<<config[i]<<"\n";
         }
-        fp.close();
+        fp.flush();
+        
     }
-
 };
 
 
@@ -121,19 +123,20 @@ int main(int argn, char* argv[]){
     // std::string input_file = argv[1];
     srand(100);
     double energy, mag;
-    Ising*  ising_sim = new Ising(400, 2.5);
-    int nsteps = 40000;
+    Ising*  ising_sim = new Ising(200, 2.27);
+    int nsteps = 400000;
     ising_sim->Initialize();
     ising_sim->Dump(); 
     for (int step=0; step<nsteps; step++){
         ising_sim->MC_Move();
-        if (step%500==0) {
+        if (step%5000==0) {
             ising_sim->Dump();
             energy = ising_sim->Calculate_energy();
             mag = ising_sim->Calculate_magnetization();
             printf("Step: %d ; Energy: %f ; Mag: %f \n", step, energy, mag);
         }
     }
+    delete ising_sim;
     return 0;
 }
 
