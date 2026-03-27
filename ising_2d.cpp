@@ -4,36 +4,92 @@
 #include <stdbool.h>
 #include <string>
 #include <fstream>
+#include <stdexcept>
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <cctype>
+#include <cstring>
 
 class Ising
 {
 public:
-    int N;
+    int N, nsteps;
     double temp;  
     double total_energy;
     double magnetization;
-    bool first_dump_write=true;
     int step;
     int* config;
-    // Definintions for dump
-    std::string file_name = "dump.ising_config";
+    // Definintions for dump and log outputs
+    std::string dump_file_name = "dump.ising_config";
+    std::string log_file_name = "log.ising";
+    int output_freq;
     std::ofstream fp;
     std::string columns ="id type x y z s";
     // Class constructor
-    Ising(int lattice_size, double boltzmann_temp){
-        N = lattice_size;
-        temp = boltzmann_temp;
-        config  = new int[N*N];
-        fp.open(file_name, std::ios::out);
-
+    // Ising(int lattice_size, double boltzmann_temp){
+    Ising(std::string input_file_name){
+        // N = lattice_size;
+        // temp = boltzmann_temp;
+        Read_input_file(input_file_name);
+        Setup_simulation();
     }
     ~Ising (){
         fp.close();
         delete[] config;
     }
-    // void Read_input(){
+    void Read_input_file(std::string input_file_name){
+        std::ifstream input_file;
+        try{
+            input_file.open(input_file_name);
+            if (!input_file.is_open()){
+                throw std::runtime_error("Unable to open the input file.");
+            }
+            std::vector<std::string>  input_commands;
+            std::string current_line;
+            while(std::getline(input_file,current_line)){
+                input_commands.push_back(current_line);
+            }
+            input_file.close();
+            // Now Parsing the input commands
+            std::string key, value;
 
-    // }
+            for (int j=0; j<input_commands.size(); j++){
+                size_t pos = input_commands[j].find("=");
+                key = input_commands[j].substr(0, pos);
+                value = input_commands[j].substr(pos+1);
+                key.erase(std::remove_if(key.begin(), key.end(), ::isspace), key.end());
+                value.erase(std::remove_if(value.begin(), value.end(), ::isspace), value.end());    
+                std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c){return std::tolower(c);});
+                if (key=="n"){
+                    N = std::stoi(value);
+                }
+                else if(key=="t"){
+                    temp = std::stof(value);
+                }
+                else if(key=="nsteps"){
+                    nsteps = std::stoi(value);
+                }
+                else if (key=="output_file"){
+                    dump_file_name = value;
+                }
+                else if (key=="output_frequency"){
+                    output_freq = std::stoi(value);
+                }
+
+            }
+            input_file.close();
+        }
+        catch (const std::exception&e){
+            std::cerr <<"Error: "<< e.what()<<std::endl;
+        }   
+        
+    }
+    void Setup_simulation(){
+        config  = new int[N*N];
+        fp.open(dump_file_name, std::ios::out);
+
+    }
 
     void Initialize(){
         step=0;
@@ -89,13 +145,6 @@ public:
     }
 
     void Dump(){
-        // if (first_dump_write){
-        //     first_dump_write=false;
-        // }
-        // else {
-        //     fp.open(file_name, std::ios::app);
-        // }
-
         // Writing the header
         fp<<"ITEM: TIMESTEP\n";
         fp<<step<<" "<<step<<"\n";
@@ -120,20 +169,24 @@ public:
 
 
 int main(int argn, char* argv[]){
-    // std::string input_file = argv[1];
+    if (argn!=2){
+        std::cerr<<"Input file required";
+        return 1;
+    }
+    std::string input_file = argv[1];
     srand(100);
     double energy, mag;
-    Ising*  ising_sim = new Ising(200, 2.27);
+    Ising*  ising_sim = new Ising(input_file);
     int nsteps = 400000;
     ising_sim->Initialize();
     ising_sim->Dump(); 
-    for (int step=0; step<nsteps; step++){
+    for (int t=0; t<nsteps; t++){
         ising_sim->MC_Move();
-        if (step%5000==0) {
+        if (t%5000==0) {
             ising_sim->Dump();
             energy = ising_sim->Calculate_energy();
             mag = ising_sim->Calculate_magnetization();
-            printf("Step: %d ; Energy: %f ; Mag: %f \n", step, energy, mag);
+            printf("Step: %d ; Energy: %f ; Mag: %f \n", t, energy, mag);
         }
     }
     delete ising_sim;
