@@ -1,0 +1,6 @@
+N = 40
+T = 2.8
+NSTEPS = 1e4
+OUTPUT_FILE = dump.out
+OUTPUT_FREQUENCY = 50
+SEED = 100

@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstring>
 #include <random>
+#include <cstdlib>
 
 class Ising
 {
@@ -87,6 +88,7 @@ public:
         }
         catch (const std::exception&e){
             std::cerr <<"Error: "<< e.what()<<std::endl;
+            std::exit(EXIT_FAILURE);
         }   
         
     }
