@@ -16,32 +16,44 @@
 class Ising
 {
 private:
-    std::mt19937 gen;
+    std::mt19937 gen;    // Defining a random number generator
 public:
-    int N, nsteps;
+    // Variable definition to run the Ising simulation
+    int N, nsteps;       
     double temp;  
     double total_energy;
     double magnetization;
     int step;
     int* config;
     int seed;
-    // Definintions for dump and log outputs
+
+    // Variable definintions for dump and log outputs
     std::string dump_file_name = "dump.ising_config";
     std::string log_file_name = "log.ising";
     int output_freq;
     std::ofstream fp;
+    std::ofstream logfp;
     std::string columns ="id type x y z s";
 
-    // Class constructor
+    // Class constructor  --> Uses the input file provided by the user
     Ising(std::string input_file_name){
         Read_input_file(input_file_name);
         Setup_simulation();
     }
+    // Class Destructor  --> Cleans up variables and closes output files
     ~Ising (){
         fp.close();
+        logfp.close();
         delete[] config;
     }
     void Read_input_file(std::string input_file_name){
+        /*
+            Reading the input parameters provided by the user
+            First it splits them with the "=" character
+            Strips them of any blank spaces
+            Then convert them to the key and value pairs
+            Finally the values are set to the simulation parameters defined.
+        */
         std::ifstream input_file;
         try{
             input_file.open(input_file_name);
@@ -50,13 +62,14 @@ public:
             }
             std::vector<std::string>  input_commands;
             std::string current_line;
+            // Copying the input commands to a vector of strings
             while(std::getline(input_file,current_line)){
                 input_commands.push_back(current_line);
             }
             input_file.close();
+
             //  Parsing the input commands as a Key and value pair
             std::string key, value;
-
             for (int j=0; j<input_commands.size(); j++){
                 size_t pos = input_commands[j].find("=");
                 key = input_commands[j].substr(0, pos);
@@ -92,28 +105,59 @@ public:
         }   
         
     }
+
     void Setup_simulation(){
-        config  = new int[N*N];
-        gen.seed(seed);
+        /*
+            Using parameters provided, this method sets up the variables for the simulation
+        */
+        config  = new int[N*N];             // Allocates heap memory on 
+        gen.seed(seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
+        logfp.open(log_file_name, std::ios::out);
 
     }
-
+    
     void Initialize(){
+        /*
+            Initializing the Spin using random numbers --> Simulating higher temperature
+            Loops over all the lattice sites and assign spin values randomly.
+        */
         step=0;
         std::uniform_int_distribution<int>spin_distr(0,1);
         int row,col;
         for ( row=0; row<N; row++){
             for ( col=0; col<N; col++){
                 config[row*N+col] = (spin_distr(gen) == 0) ? -1 : 1;
-                // printf("x= %d y= %d: spin=%d ", i, j, config[i][j]);
             }
         }
     }
+    void Run(){
+        /*
+            This function runs the simulation from step 0 to nsteps  (defined by the user input)
+            It first initializes the lattice spins over the whole domain.
+            Every output_frequency, output is logged in the dump file and log file, along with console print.
+        */
+        Initialize();
+        for (step=0; step<nsteps; step++){
+            MC_Move();
+            if (step%output_freq==0|| step==nsteps-1) {
+                Dump();
+                Calculate_energy();
+                Calculate_magnetization();
+                Print_progress();
+            }
+        }
+    }
+    
     void MC_Move(){ 
+        /*
+        This function loops over all the lattice sites and attempts to flip the spin of that site
+        If the energy-difference (ediff) is negative, the flipping action is automatically accepted.
+        But if it is positive, it uses a random number to decide to flip it or not.
+        */
         std::uniform_int_distribution<int> int_distr(0,N-1);
         std::uniform_real_distribution<double> real_distr(0.0, 1.0);
-        int row, col, spin, ry, rx, neigh_sum, cost;
+        int row, col, spin, ry, rx, neigh_sum, ediff;
         double rn;
         for (row=0; row<N; row++){
             for (col=0; col<N; col++){
@@ -122,44 +166,66 @@ public:
                 ry = int_distr(gen);
                 rx = int_distr(gen);
                 spin = config[ry*N+rx];
-                neigh_sum = config[((ry-1+N)%N)*N+rx] + config[N*((ry+1)%N)+rx] + config[ry*N+(rx-1+N)%N] + config[ry*N+(rx+1)%N];
+                neigh_sum = config[((ry-1+N)%N)*N+rx] + 
+                            config[N*((ry+1)%N)+rx] + 
+                            config[ry*N+(rx-1+N)%N] + 
+                            config[ry*N+(rx+1)%N];
                 rn = real_distr(gen);
-                cost = 2*spin*neigh_sum;
-                if (cost<0){
+                ediff = 2*spin*neigh_sum;
+                if (ediff<0){
                     spin*=-1;
                 }
-                else if (rn< exp(-cost/temp)){
+                else if (rn< exp(-ediff/temp)){
                     spin*=-1;
                 }
                 config[ry*N+rx]=spin;
             }   
         }
-        step++;
+        
+    }    
+
+    void Print_progress(){
+        printf("Step: %d ; Energy: %.2f ; Mag: %.2f \n", step, total_energy, magnetization);
     }
-    double Calculate_energy(){
+
+    void Calculate_energy(){
+        /*
+            Loops over the whole lattice sites and calculates the Hamiltonian.
+            Hamiltonian is higher if the spin of neighboring sites are similar
+        */
         int row, col, spin, neigh_sum;
         total_energy=0.0;   
         for ( row=0; row<N; row++){
             for ( col=0; col<N; col++){
                 spin = config[row*N+col];
-                neigh_sum = config[N*((row-1+N)%N)+col] + config[N*((row+1)%N)+col] + config[row*N+(col-1+N)%N] + config[row*N + (col+1)%N];
+                neigh_sum = config[N*((row-1+N)%N)+col] + 
+                            config[N*((row+1)%N)+col] + 
+                            config[row*N+(col-1+N)%N] + 
+                            config[row*N + (col+1)%N];
                 total_energy+= -neigh_sum*spin;
             }
         }
         total_energy/=2;
-        return total_energy;
     }
-    double Calculate_magnetization(){
+
+    void Calculate_magnetization(){
+        /*
+            Loops over lattice sites and calculate the sum of the spins--> Magnetization 
+        */
         int i;
         magnetization=0.0;
         for ( i=0; i<N*N; i++){
             magnetization+=config[i];
         }
-        return magnetization;
     }
 
     void Dump(){
-        // Writing the header
+        /*
+            Writes the coordinates and spins of the lattice sites to a dump file
+            It can be visualized in Ovito software.
+        */
+
+        // Writing the header part of the output dump file
         fp<<"ITEM: TIMESTEP\n";
         fp<<step<<" "<<step<<"\n";
         fp<<"ITEM: NUMBER OF ATOMS\n";
@@ -177,11 +243,21 @@ public:
         fp.flush();
         
     }
+    void Log(){
+        /* 
+            Writes progress to the log file 
+        */
+        if (step==0){
+            logfp<<"Step       Energy        Magnetization \n";
+        }
+        else{
+            logfp<<step<< "     "<<total_energy<<"      "<<magnetization<<"\n";
+        }
+        logfp.flush();
+    }
+
 
 };
-
-
-
 
 int main(int argn, char* argv[]){
     if (argn!=2){
@@ -191,18 +267,7 @@ int main(int argn, char* argv[]){
     std::string input_file = argv[1];
     double energy, mag;
     Ising*  ising_sim = new Ising(input_file);
-    int nsteps = 400000;
-    ising_sim->Initialize();
-    ising_sim->Dump(); 
-    for (int t=0; t<nsteps; t++){
-        ising_sim->MC_Move();
-        if (t%5000==0) {
-            ising_sim->Dump();
-            energy = ising_sim->Calculate_energy();
-            mag = ising_sim->Calculate_magnetization();
-            printf("Step: %d ; Energy: %f ; Mag: %f \n", t, energy, mag);
-        }
-    }
+    ising_sim->Run();
     delete ising_sim;
     return 0;
 }
