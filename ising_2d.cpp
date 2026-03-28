@@ -141,10 +141,11 @@ public:
         for (step=0; step<nsteps; step++){
             MC_Move();
             if (step%output_freq==0|| step==nsteps-1) {
-                Dump();
+                Dump();             // Writing Dump file
                 Calculate_energy();
                 Calculate_magnetization();
-                Print_progress();
+                Log();              // Writing Logfile
+                Print_progress();   // Printing progress to the console
             }
         }
     }
@@ -261,14 +262,16 @@ public:
 
 int main(int argn, char* argv[]){
     if (argn!=2){
-        std::cerr<<"Input file required";
+        std::cerr<<"Input file required\n";
         return 1;
     }
     std::string input_file = argv[1];
     double energy, mag;
+    // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
-    ising_sim->Run();
-    delete ising_sim;
+    ising_sim->Run();     // Running the simulation
+
+    delete ising_sim;     
     return 0;
 }
 
