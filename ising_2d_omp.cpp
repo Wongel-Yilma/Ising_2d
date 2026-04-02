@@ -20,7 +20,7 @@ int thread_count;
 class Ising
 {
 private:
-    std::mt19937 gen;    // Defining a random number generator
+    std::mt19937 gen;    // Defining a global random number generator
 public:
     // Variable definition to run the Ising simulation
     int N, nsteps;       
@@ -29,8 +29,10 @@ public:
     double magnetization;
     int step;
     int* config;
+    int* initial_rand_nums;
+    double* rand_nums;
     int base_seed;
-    std::vector<std::mt19937> rn_generators;
+    // std::vector<std::mt19937> rn_generators;
 
     // Variable definintions for dump and log outputs
     std::string dump_file_name = "dump.ising_config";
@@ -117,11 +119,13 @@ public:
         */
         config  = new int[N*N];             // Allocates heap memory on 
         // Create generators for each thread.
-        rn_generators.resize(thread_count);
-        for (int k =0; k<thread_count; k++){
-            rn_generators[k].seed(base_seed+k);
-        }
-        // gen.seed(seed);                     // Sets the random seed based on the user provided value
+        // rn_generators.resize(thread_count);
+        // for (int k =0; k<thread_count; k++){
+        //     rn_generators[k].seed(base_seed+k);
+        // }
+        initial_rand_nums = new int[N*N];
+        rand_nums = new double[N*N];
+        gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
         logfp.open(log_file_name, std::ios::out);
 
@@ -132,16 +136,20 @@ public:
             Initializing the Spin using random numbers --> Simulating higher temperature
             Loops over all the lattice sites and assign spin values randomly.
         */
-        
+        std::uniform_int_distribution<int>spin_distr(0,1);
+        // Generating the random numbers
+        // And populate an array
+        // before the parallel section 
+        for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
+
         step=0;
         int row,col, thread_id;
-    #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,rn_generators) default (none)
+    #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,initial_rand_nums) default (none)
         for ( row=0; row<N; row++){
-            thread_id = omp_get_thread_num();
-            std::mt19937& local_gen = rn_generators[thread_id];
-            std::uniform_int_distribution<int>spin_distr(0,1);
+            // thread_id = omp_get_thread_num();
+            // std::mt19937& local_gen = rn_generators[thread_id];
             for ( col=0; col<N; col++){
-                config[row*N+col] = (spin_distr(local_gen) == 0) ? -1 : 1;
+                config[row*N+col] = (initial_rand_nums[row*N+col] == 0) ? -1 : 1;
             }
         }
     }
@@ -188,12 +196,14 @@ public:
         int phase;
         double rn;
         std::uniform_real_distribution<double> real_distr(0.0, 1.0);
+        for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
+
         #pragma omp parallel for num_threads(thread_count) default(none) \
                         private(row, col, neigh_sum, real_distr, ediff, rn, spin, phase, thread_id) \
-                        shared(config, N, rn_generators )
+                        shared(config, N, rand_nums )
         for (row=0; row<N; row++){
-            thread_id = omp_get_thread_num();
-            std::mt19937& local_gen = rn_generators[thread_id];
+            // thread_id = omp_get_thread_num();
+            // std::mt19937& local_gen = rn_generators[thread_id];
             phase = row%2;
             for (col=phase; col<N; col+=2){
 
@@ -202,7 +212,8 @@ public:
                             config[N*((row+1)%N)+col] + 
                             config[row*N+(col-1+N)%N] + 
                             config[row*N+(col+1)%N];
-                rn = real_distr(local_gen);
+                // rn = real_distr(local_gen);
+                rn = rand_nums[row*N+col];
                 ediff = 2*spin*neigh_sum;
                 if (ediff<0){
                     spin*=-1;
@@ -295,14 +306,14 @@ public:
 };
 
 int main(int argn, char* argv[]){
-    // if (argn!=3){
-    //     std::cerr<<"Input file required\n";
-    //     return 1;
-    // }
-    // std::string input_file = argv[1];
-    std::string input_file = "in.input";
-    // thread_count = std::stoi(argv[1]);
-    thread_count = 2;
+    if (argn!=3){
+        std::cerr<<"Input file required\n";
+        return 1;
+    }
+    std::string input_file = argv[1];
+    // std::string input_file = "in.input";
+    thread_count = std::stoi(argv[2]);
+    // thread_count = 4;
     printf("Read the cmd arg 1\n");
     // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
