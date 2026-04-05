@@ -206,57 +206,32 @@ public:
     #pragma omp parallel num_threads(thread_count) default(none) \
                         private(row, col, neigh_sum,  ediff, rn, spin, phase, start_idx) \
                         shared(config, N, rand_nums )
+    for (phase = 0; phase<2; phase++){
     #pragma omp for
-    for (row=0; row<N; row++){
-        // thread_id = omp_get_thread_num();
-        // std::mt19937& local_gen = rn_generators[thread_id];
-        // for (phase=0; phase<2; phase++){
-        phase = 0;
-        start_idx = (phase+row)%2;
-        for (col=start_idx; col<N; col+=2){
-            spin = config[row*N+col];
-            neigh_sum = config[((row-1+N)%N)*N+col] + 
-                        config[N*((row+1)%N)+col] + 
-                        config[row*N+(col-1+N)%N] + 
-                        config[row*N+(col+1)%N];
-            // rn = real_distr(local_gen);
-            rn = rand_nums[row*N+col];
-            ediff = static_cast<double>(2*spin*neigh_sum);
-            if (ediff<0){
-                spin*=-1;
+        for (row=0; row<N; row++){
+            // thread_id = omp_get_thread_num();
+            // std::mt19937& local_gen = rn_generators[thread_id];
+            // for (phase=0; phase<2; phase++){
+            // phase = 0;
+            start_idx = (phase+row)%2;
+            for (col=start_idx; col<N; col+=2){
+                spin = config[row*N+col];
+                neigh_sum = config[((row-1+N)%N)*N+col] + 
+                            config[N*((row+1)%N)+col] + 
+                            config[row*N+(col-1+N)%N] + 
+                            config[row*N+(col+1)%N];
+                // rn = real_distr(local_gen);
+                rn = rand_nums[row*N+col];
+                ediff = static_cast<double>(2*spin*neigh_sum);
+                if (ediff<0){
+                    spin*=-1;
+                }
+                else if (rn< exp(-ediff/temp)){
+                    spin*=-1;
+                }
+                config[row*N+col]=spin;
             }
-            else if (rn< exp(-ediff/temp)){
-                spin*=-1;
-            }
-            config[row*N+col]=spin;
         }
-    }
-
-    // #pragma omp barrier
-
-    #pragma omp for
-    for (row=0; row<N; row++){
-        phase = 1;
-        start_idx = (phase+row)%2;
-        for (col=start_idx; col<N; col+=2){
-            spin = config[row*N+col];
-            neigh_sum = config[((row-1+N)%N)*N+col] + 
-                        config[N*((row+1)%N)+col] + 
-                        config[row*N+(col-1+N)%N] + 
-                        config[row*N+(col+1)%N];
-            // rn = real_distr(local_gen);
-            rn = rand_nums[row*N+col];
-            ediff = static_cast<double>(2*spin*neigh_sum);
-            if (ediff<0){
-                spin*=-1;
-            }
-            else if (rn< exp(-ediff/temp)){
-                spin*=-1;
-            }
-            config[row*N+col]=spin;
-        }
-
-        // }
     }
     
     }    

@@ -174,48 +174,28 @@ public:
         double rn, ediff;
 
         // Phase 1 loop
-        for (row=0; row<N; row++){
-            phase = 0;
-            start_idx = (row+phase)%2;
-            for(col=start_idx; col<N; col+=2){
-                spin = config[row*N+col];
-                neigh_sum = config[((row-1+N)%N)*N+col] + 
-                            config[N*((row+1)%N)+col] + 
-                            config[row*N+(col-1+N)%N] + 
-                            config[row*N+(col+1)%N];
-                // rn = real_distr(gen);
-                rn = rand_nums[row*N+col];
-                ediff = static_cast<double>(2*spin*neigh_sum);
-                if (ediff<0){
-                    spin*=-1;
-                }
-                else if (rn< exp(-ediff/temp)){
-                    spin*=-1;
-                }
-                config[row*N+col]=spin;
-            }   
-        }
-        // Phase 2 loop
-        for (row=0; row<N; row++){
-            phase = 1;
-            start_idx = (row+phase)%2;
-            for(col=start_idx; col<N; col+=2){
-                spin = config[row*N+col];
-                neigh_sum = config[((row-1+N)%N)*N+col] + 
-                            config[N*((row+1)%N)+col] + 
-                            config[row*N+(col-1+N)%N] + 
-                            config[row*N+(col+1)%N];
-                // rn = real_distr(gen);
-                rn = rand_nums[row*N+col];
-                ediff = static_cast<double>(2*spin*neigh_sum);
-                if (ediff<0){
-                    spin*=-1;
-                }
-                else if (rn< exp(-ediff/temp)){
-                    spin*=-1;
-                }
-                config[row*N+col]=spin;
-            }   
+        for (phase=0; phase<2; phase++){
+            for (row=0; row<N; row++){
+                // phase = 0;
+                start_idx = (row+phase)%2;
+                for(col=start_idx; col<N; col+=2){
+                    spin = config[row*N+col];
+                    neigh_sum = config[((row-1+N)%N)*N+col] + 
+                                config[N*((row+1)%N)+col] + 
+                                config[row*N+(col-1+N)%N] + 
+                                config[row*N+(col+1)%N];
+                    // rn = real_distr(gen);
+                    rn = rand_nums[row*N+col];
+                    ediff = static_cast<double>(2*spin*neigh_sum);
+                    if (ediff<0){
+                        spin*=-1;
+                    }
+                    else if (rn< exp(-ediff/temp)){
+                        spin*=-1;
+                    }
+                    config[row*N+col]=spin;
+                }   
+            }
         }
         
     }    
