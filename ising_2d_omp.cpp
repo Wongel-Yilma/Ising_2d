@@ -136,15 +136,15 @@ public:
             Initializing the Spin using random numbers --> Simulating higher temperature
             Loops over all the lattice sites and assign spin values randomly.
         */
+        step=0;
         std::uniform_int_distribution<int>spin_distr(0,1);
         // Generating the random numbers
         // And populate an array
         // before the parallel section 
         for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
-
-        step=0;
+        
         int row,col, thread_id;
-    #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,initial_rand_nums) default (none)
+        #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,initial_rand_nums) default (none)
         for ( row=0; row<N; row++){
             // thread_id = omp_get_thread_num();
             // std::mt19937& local_gen = rn_generators[thread_id];
@@ -152,6 +152,9 @@ public:
                 config[row*N+col] = (initial_rand_nums[row*N+col] == 0) ? -1 : 1;
             }
         }
+        Calculate_magnetization();
+        std::cout<<"Initial magnetization: "<<magnetization<<" \n";
+
     }
     void Run(){
         /*
@@ -191,39 +194,71 @@ public:
 
         */
         // std::uniform_int_distribution<int> int_distr(0,N-1);
-        int row, col, spin,  neigh_sum, ediff;
-        int thread_id;
-        int phase;
+
+        int row, col, spin,  neigh_sum;
+        double ediff;
+        // int thread_id;
+        int phase, start_idx;
         double rn;
         std::uniform_real_distribution<double> real_distr(0.0, 1.0);
         for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
 
-        #pragma omp parallel for num_threads(thread_count) default(none) \
-                        private(row, col, neigh_sum, real_distr, ediff, rn, spin, phase, thread_id) \
+    #pragma omp parallel num_threads(thread_count) default(none) \
+                        private(row, col, neigh_sum,  ediff, rn, spin, phase, start_idx) \
                         shared(config, N, rand_nums )
-        for (row=0; row<N; row++){
-            // thread_id = omp_get_thread_num();
-            // std::mt19937& local_gen = rn_generators[thread_id];
-            phase = row%2;
-            for (col=phase; col<N; col+=2){
-
-                spin = config[row*N+col];
-                neigh_sum = config[((row-1+N)%N)*N+col] + 
-                            config[N*((row+1)%N)+col] + 
-                            config[row*N+(col-1+N)%N] + 
-                            config[row*N+(col+1)%N];
-                // rn = real_distr(local_gen);
-                rn = rand_nums[row*N+col];
-                ediff = 2*spin*neigh_sum;
-                if (ediff<0){
-                    spin*=-1;
-                }
-                else if (rn< exp(-ediff/temp)){
-                    spin*=-1;
-                }
-                config[row*N+col]=spin;
+    #pragma omp for
+    for (row=0; row<N; row++){
+        // thread_id = omp_get_thread_num();
+        // std::mt19937& local_gen = rn_generators[thread_id];
+        // for (phase=0; phase<2; phase++){
+        phase = 0;
+        start_idx = (phase+row)%2;
+        for (col=start_idx; col<N; col+=2){
+            spin = config[row*N+col];
+            neigh_sum = config[((row-1+N)%N)*N+col] + 
+                        config[N*((row+1)%N)+col] + 
+                        config[row*N+(col-1+N)%N] + 
+                        config[row*N+(col+1)%N];
+            // rn = real_distr(local_gen);
+            rn = rand_nums[row*N+col];
+            ediff = static_cast<double>(2*spin*neigh_sum);
+            if (ediff<0){
+                spin*=-1;
             }
+            else if (rn< exp(-ediff/temp)){
+                spin*=-1;
+            }
+            config[row*N+col]=spin;
         }
+    }
+
+    // #pragma omp barrier
+
+    #pragma omp for
+    for (row=0; row<N; row++){
+        phase = 1;
+        start_idx = (phase+row)%2;
+        for (col=start_idx; col<N; col+=2){
+            spin = config[row*N+col];
+            neigh_sum = config[((row-1+N)%N)*N+col] + 
+                        config[N*((row+1)%N)+col] + 
+                        config[row*N+(col-1+N)%N] + 
+                        config[row*N+(col+1)%N];
+            // rn = real_distr(local_gen);
+            rn = rand_nums[row*N+col];
+            ediff = static_cast<double>(2*spin*neigh_sum);
+            if (ediff<0){
+                spin*=-1;
+            }
+            else if (rn< exp(-ediff/temp)){
+                spin*=-1;
+            }
+            config[row*N+col]=spin;
+        }
+
+        // }
+    }
+    
     }    
 
     void Print_progress(){

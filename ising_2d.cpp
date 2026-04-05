@@ -25,7 +25,9 @@ public:
     double magnetization;
     int step;
     int* config;
-    int seed;
+    int* initial_rand_nums;
+    double* rand_nums;
+    int base_seed;
 
     // Variable definintions for dump and log outputs
     std::string dump_file_name = "dump.ising_config";
@@ -34,6 +36,8 @@ public:
     std::ofstream fp;
     std::ofstream logfp;
     std::string columns ="id type x y z s";
+
+
 
     // Class constructor  --> Uses the input file provided by the user
     Ising(std::string input_file_name){
@@ -93,7 +97,7 @@ public:
                     output_freq = std::stoi(value);
                 }
                 else if (key=="seed"){
-                    seed = std::stoi(value);
+                    base_seed = std::stoi(value);
                 }
 
             }
@@ -111,7 +115,9 @@ public:
             Using parameters provided, this method sets up the variables for the simulation
         */
         config  = new int[N*N];             // Allocates heap memory on 
-        gen.seed(seed);                     // Sets the random seed based on the user provided value
+        initial_rand_nums = new int[N*N];
+        rand_nums = new double[N*N];
+        gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
         logfp.open(log_file_name, std::ios::out);
 
@@ -124,12 +130,15 @@ public:
         */
         step=0;
         std::uniform_int_distribution<int>spin_distr(0,1);
+        for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
         int row,col;
         for ( row=0; row<N; row++){
             for ( col=0; col<N; col++){
-                config[row*N+col] = (spin_distr(gen) == 0) ? -1 : 1;
+                config[row*N+col] = (initial_rand_nums[row*N+col] == 0) ? -1 : 1;
             }
         }
+        Calculate_magnetization();
+        std::cout<<"Initial magnetization: "<<magnetization<<" \n";
     }
     void Run(){
         /*
@@ -138,6 +147,7 @@ public:
             Every output_frequency, output is logged in the dump file and log file, along with console print.
         */
         Initialize();
+        printf("Initilized configs\n");
         for (step=0; step<nsteps; step++){
             MC_Move();
             if (step%output_freq==0|| step==nsteps-1) {
@@ -155,31 +165,56 @@ public:
         This function loops over all the lattice sites and attempts to flip the spin of that site
         If the energy-difference (ediff) is negative, the flipping action is automatically accepted.
         But if it is positive, it uses a random number to decide to flip it or not.
+
+        Checkerboard update --> Consistent with the openmp implementation
         */
-        std::uniform_int_distribution<int> int_distr(0,N-1);
         std::uniform_real_distribution<double> real_distr(0.0, 1.0);
-        int row, col, spin, ry, rx, neigh_sum, ediff;
-        double rn;
+        for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
+        int phase, row, col, spin, neigh_sum, start_idx;
+        double rn, ediff;
+
+        // Phase 1 loop
         for (row=0; row<N; row++){
-            for (col=0; col<N; col++){
-                // ry=  rand()%N;
-                // rx = rand()%N;
-                ry = int_distr(gen);
-                rx = int_distr(gen);
-                spin = config[ry*N+rx];
-                neigh_sum = config[((ry-1+N)%N)*N+rx] + 
-                            config[N*((ry+1)%N)+rx] + 
-                            config[ry*N+(rx-1+N)%N] + 
-                            config[ry*N+(rx+1)%N];
-                rn = real_distr(gen);
-                ediff = 2*spin*neigh_sum;
+            phase = 0;
+            start_idx = (row+phase)%2;
+            for(col=start_idx; col<N; col+=2){
+                spin = config[row*N+col];
+                neigh_sum = config[((row-1+N)%N)*N+col] + 
+                            config[N*((row+1)%N)+col] + 
+                            config[row*N+(col-1+N)%N] + 
+                            config[row*N+(col+1)%N];
+                // rn = real_distr(gen);
+                rn = rand_nums[row*N+col];
+                ediff = static_cast<double>(2*spin*neigh_sum);
                 if (ediff<0){
                     spin*=-1;
                 }
                 else if (rn< exp(-ediff/temp)){
                     spin*=-1;
                 }
-                config[ry*N+rx]=spin;
+                config[row*N+col]=spin;
+            }   
+        }
+        // Phase 2 loop
+        for (row=0; row<N; row++){
+            phase = 1;
+            start_idx = (row+phase)%2;
+            for(col=start_idx; col<N; col+=2){
+                spin = config[row*N+col];
+                neigh_sum = config[((row-1+N)%N)*N+col] + 
+                            config[N*((row+1)%N)+col] + 
+                            config[row*N+(col-1+N)%N] + 
+                            config[row*N+(col+1)%N];
+                // rn = real_distr(gen);
+                rn = rand_nums[row*N+col];
+                ediff = static_cast<double>(2*spin*neigh_sum);
+                if (ediff<0){
+                    spin*=-1;
+                }
+                else if (rn< exp(-ediff/temp)){
+                    spin*=-1;
+                }
+                config[row*N+col]=spin;
             }   
         }
         
