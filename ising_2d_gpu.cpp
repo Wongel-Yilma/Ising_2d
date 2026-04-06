@@ -13,7 +13,7 @@
 #include <random>
 #include <cstdlib>
 
-extern "C" void launch_kernel_ising(int * input_config, int * output_config, double *rand_nums, int N, double temp);
+extern "C" void launch_kernel_ising(int * input_config, int * output_config, float *rand_nums, int N, float temp);
 
 class Ising
 {
@@ -22,15 +22,15 @@ private:
 public:
     // Variable definition to run the Ising simulation
     int N, nsteps;       
-    double temp;  
-    double total_energy;
-    double magnetization;
+    float temp;  
+    float total_energy;
+    float magnetization;
     int step;
     int* config;
     int* config_cpy;
     int size_config ;
     int* initial_rand_nums;
-    double* rand_nums;
+    float* rand_nums;
     int base_seed;
 
 
@@ -122,7 +122,7 @@ public:
         config  = new int[N*N];             // Allocates heap memory on 
         config_cpy = new int[N*N];
         initial_rand_nums = new int[N*N];
-        rand_nums = new double[N*N];
+        rand_nums = new float[N*N];
         size_config = N*N*sizeof(int);
         gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
@@ -175,9 +175,9 @@ public:
 
         Checkerboard update --> Consistent with the openmp implementation
         */
-        std::uniform_real_distribution<double> real_distr(0.0, 1.0);
+        std::uniform_real_distribution<float> real_distr(0.0, 1.0);
         for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
-        
+
         launch_kernel_ising(config, config_cpy,rand_nums, N, temp);
         memcpy(config,config_cpy, size_config);
         int sum = 0;
@@ -266,7 +266,7 @@ int main(int argn, char* argv[]){
         return 1;
     }
     std::string input_file = argv[1];
-    double energy, mag;
+    float energy, mag;
     // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
     ising_sim->Run();     // Running the simulation

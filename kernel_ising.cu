@@ -3,31 +3,30 @@
 #include <stdio.h>
 #include <cassert>
 
-__global__ void mcMoveKernel(int *input_config_d, int * output_config_d, double * rand_nums_d, int N, int phase, double temp){
+__global__ void mcMoveKernel(int *input_config_d, int * output_config_d, float * rand_nums_d, int N, int phase, float temp){
     int row = blockIdx.y*blockDim.y + threadIdx.y;
     int col = blockIdx.x*blockDim.x + threadIdx.x;
     int spin;
-    double rn, ediff;
-    double neigh_sum;
+    float rn, ediff;
+    float neigh_sum;
 
-    if (row< N && col <N){
+    if (row< N && col <N){  // Guard to prevent memory access that is out of bounds
         if (((phase+row+col)%2==0)){
             spin = input_config_d[row*N+col];
             rn  = rand_nums_d[row*N+col];
             neigh_sum = input_config_d[((row-1+N)%N)*N+col] + 
-                                    input_config_d[N*((row+1)%N)+col] + 
-                                    input_config_d[row*N+(col-1+N)%N] + 
-                                    input_config_d[row*N+(col+1)%N];
+                        input_config_d[N*((row+1)%N)+col] + 
+                        input_config_d[row*N+(col-1+N)%N] + 
+                        input_config_d[row*N+(col+1)%N];
             ediff = 2*spin*neigh_sum;
-            if (ediff<0.0){
-                spin*=-1;
-            }
-            else if (rn<(exp(-ediff/temp))){
+            if (ediff<0.0|| rn< exp(-ediff/temp)  ){
                 spin*=-1;
             }
             output_config_d[row*N+col]= spin;
         }
-        output_config_d[row*N+col]= spin;
+        else  {
+            output_config_d[row*N+col]= 0;
+        }
     }
 }
 inline cudaError_t checkCuda(cudaError_t result){
@@ -38,7 +37,7 @@ inline cudaError_t checkCuda(cudaError_t result){
     return result;
 }
 
-extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h, double *rand_nums_h, int N, double temp){
+extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h, float *rand_nums_h, int N, float temp){
     
     int threadsPerBlock = 16;
     int size_config = N*N*sizeof(int);
@@ -47,7 +46,7 @@ extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h,
     
     // Creating device variables
     int *input_config_d, *output_config_d;
-    double *rand_nums_d;
+    float *rand_nums_d;
 
     // Allocating memory for the device variables
     checkCuda(cudaMalloc((void **)&input_config_d, size_config));
