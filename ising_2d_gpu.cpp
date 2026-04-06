@@ -180,9 +180,9 @@ public:
 
         launch_kernel_ising(config, config_cpy,rand_nums, N, temp);
         memcpy(config,config_cpy, size_config);
-        int sum = 0;
-        for (int i=0; i< N*N; i++) sum+= config_cpy[i];
-        printf("Total sum in the C++ file %d\n", sum);
+        // int sum = 0;
+        // for (int i=0; i< N*N; i++) sum+= config_cpy[i];
+        // printf("Total sum in the C++ file %d\n", sum);
     }    
 
     void Print_progress(){
@@ -266,7 +266,6 @@ int main(int argn, char* argv[]){
         return 1;
     }
     std::string input_file = argv[1];
-    float energy, mag;
     // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
     ising_sim->Run();     // Running the simulation
