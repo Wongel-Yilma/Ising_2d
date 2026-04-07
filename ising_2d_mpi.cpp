@@ -31,6 +31,9 @@ public:
     int base_seed;
     int rank; 
     int size;
+    int up, down;
+    int * upper_ghost;
+    int * lower_ghost;
     // std::vector<std::mt19937> rn_generators;
 
     // Variable definintions for dump and log outputs
@@ -53,6 +56,8 @@ public:
         std::string input_file = arg[1];
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
+        int up    = (rank - 1 + size) % size;
+        int down  = (rank + 1) % size;
         if (rank==0){
             Read_input_file(input_file);
             Setup_simulation();
@@ -151,6 +156,9 @@ public:
         // for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
         
         std::mt19937 local_rn_gen;
+        upper_ghost = new int [N];
+        lower_ghost = new int [N];
+
         local_rn_gen.seed(base_seed+rank);
         int local_N = N/size;
         int * local_config;
@@ -162,15 +170,43 @@ public:
                 local_config[row*N+col] = (spin_distr(local_rn_gen) == 0) ? -1 : 1;
             }
         }
-        std::cout<<"Processor "<<rank<<" is here "<<local_config[0]<<std::endl;
-        MPI_Gather(local_config, N*local_N, MPI_INT, config, N*local_N,MPI_INT, 0, MPI_COMM_WORLD);
-        if (rank ==0)
-        {
-            std::cout<<"Global Processor "<<rank<<" is here "<<config[0]<<std::endl;
-            Calculate_magnetization();
-            Dump();
-            std::cout<<"Initial magnetization: "<<magnetization<<" \n";
-        }
+        // std::cout<<"Processor "<<rank<<" is here "<<local_config[0]<<std::endl;
+        // MPI_Gather(local_config, N*local_N, MPI_INT, config, N*local_N,MPI_INT, 0, MPI_COMM_WORLD);
+        // if (rank ==0)
+        // {
+        //     std::cout<<"Global Processor "<<rank<<" is here "<<config[0]<<std::endl;
+        //     Calculate_magnetization();
+        //     Dump();
+        //     std::cout<<"Initial magnetization: "<<magnetization<<" \n";
+        // }
+        MPI_Status lower_comm_status;
+        
+        // Sending from even ranks
+        if ((rank%2)==0)
+        // {
+        //     MPI_Send(&local_config[0], N, MPI_INT, up, 0,MPI_COMM_WORLD);
+        //     MPI_Recv(lower_ghost, N, MPI_INT, down, 0, MPI_COMM_WORLD, &lower_comm_status);
+        // }
+        // else{
+        //     MPI_Recv(lower_ghost, N, MPI_INT, down, 0, MPI_COMM_WORLD, &lower_comm_status);
+        //     MPI_Send(&local_config[0], N, MPI_INT, up,0,MPI_COMM_WORLD);
+        // }
+
+        // Sending from odd ranks
+        // if ((rank%2)==1)
+        // {
+        // }
+        // else{
+        // }
+        MPI_Sendrecv(&local_config[0], N, MPI_INT, up, 0, lower_ghost, N, MPI_INT, down, 0, MPI_COMM_WORLD, &lower_comm_status);
+        int actual_count;
+        MPI_Get_count(&lower_comm_status, MPI_INT, &actual_count);
+        std::cout<<"Process "<< rank <<" has count "<< actual_count<<std::endl;
+        
+        
+        // MPI_Status upper_comm_status;
+        // int upper_disp = (local_N-1)*N;
+        // MPI_Sendrecv(&local_config[upper_disp], N, MPI_INT, down, 1, upper_ghost, N, MPI_INT, rank, 1, MPI_COMM_WORLD, &upper_comm_status);
     }
     void Run(){
         /*
@@ -178,8 +214,7 @@ public:
             It first initializes the lattice spins over the whole domain.
             Every output_frequency, output is logged in the dump file and log file, along with console print.
         */
-        // Initialize();
-        // printf("Initilized configs\n");
+
         for (step=0; step<nsteps; step++){
             MC_Move();
             if (step%output_freq==0|| step==nsteps-1) {
