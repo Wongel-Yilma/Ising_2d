@@ -137,14 +137,18 @@ public:
             Loops over all the lattice sites and assign spin values randomly.
         */
         step=0;
-        std::uniform_int_distribution<int>spin_distr(0,1);
         // Generating the random numbers
         // And populate an array
         // before the parallel section 
-        for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
+        #pragma omp single
+        {
+            std::uniform_int_distribution<int>spin_distr(0,1);
+            for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
+        }
         
         int row,col, thread_id;
-        #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,initial_rand_nums) default (none)
+        // #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,initial_rand_nums) default (none)
+        #pragma omp for private(row, col)
         for ( row=0; row<N; row++){
             // thread_id = omp_get_thread_num();
             // std::mt19937& local_gen = rn_generators[thread_id];
@@ -153,7 +157,10 @@ public:
             }
         }
         Calculate_magnetization();
-        std::cout<<"Initial magnetization: "<<magnetization<<" \n";
+        #pragma omp single
+        {
+            std::cout<<"Initial magnetization: "<<magnetization<<" \n";
+        }
 
     }
     void Run(){
@@ -162,16 +169,34 @@ public:
             It first initializes the lattice spins over the whole domain.
             Every output_frequency, output is logged in the dump file and log file, along with console print.
         */
-        Initialize();
-        printf("Initilized configs\n");
-        for (step=0; step<nsteps; step++){
-            MC_Move();
-            if (step%output_freq==0|| step==nsteps-1) {
-                Dump();             // Writing Dump file
-                Calculate_energy();
-                Calculate_magnetization();
-                Log();              // Writing Logfile
-                Print_progress();   // Printing progress to the console
+       #pragma omp parallel num_threads(thread_count)
+       {
+
+           Initialize();
+           #pragma omp single
+           {
+               printf("Initilized configs\n");
+           }
+           step = 0;
+        //    for (step=0; step<nsteps; step++){
+            while (step<nsteps){
+                MC_Move();
+                if (step%output_freq==0|| step==nsteps-1) {
+                    Calculate_energy();
+                    Calculate_magnetization();
+                    #pragma omp single
+                    {
+                        Dump();             // Writing Dump file
+                        Log();              // Writing Logfile
+                        Print_progress();   // Printing progress to the console
+                    
+                        }
+                    }
+                #pragma omp barrier
+                #pragma omp single
+                {
+                    step++;
+                }
             }
         }
     }
@@ -200,14 +225,17 @@ public:
         // int thread_id;
         int phase, start_idx;
         double rn;
-        std::uniform_real_distribution<double> real_distr(0.0, 1.0);
-        for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
+        #pragma omp single
+        {
+            std::uniform_real_distribution<double> real_distr(0.0, 1.0);
+            for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
+        }
 
-    #pragma omp parallel num_threads(thread_count) default(none) \
-                        private(row, col, neigh_sum,  ediff, rn, spin, phase, start_idx) \
-                        shared(config, N, rand_nums )
+    // #pragma omp parallel num_threads(thread_count) default(none) \
+    //                     private(row, col, neigh_sum,  ediff, rn, spin, phase, start_idx) \
+    //                     shared(config, N, rand_nums )
     for (phase = 0; phase<2; phase++){
-    #pragma omp for
+        #pragma omp for private(row, col, neigh_sum, ediff, spin, start_idx, rn)  //shared(N, phase, rand_nums, config)
         for (row=0; row<N; row++){
             // thread_id = omp_get_thread_num();
             // std::mt19937& local_gen = rn_generators[thread_id];
@@ -250,7 +278,8 @@ public:
             Hamiltonian is higher if the spin of neighboring sites are similar
         */
         int row, col, spin, neigh_sum;
-        total_energy=0.0;   
+        total_energy=0.0;  
+        #pragma omp for private(row, col, neigh_sum, spin)  reduction(+:total_energy) //shared(N,  config)
         for ( row=0; row<N; row++){
             for ( col=0; col<N; col++){
                 spin = config[row*N+col];
@@ -270,6 +299,7 @@ public:
         */
         int i;
         magnetization=0.0;
+        #pragma omp for private(i)  reduction(+:magnetization) //shared(N, config)
         for ( i=0; i<N*N; i++){
             magnetization+=config[i];
         }
