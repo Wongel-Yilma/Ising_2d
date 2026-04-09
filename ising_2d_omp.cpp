@@ -12,6 +12,7 @@
 #include <cstring>
 #include <random>
 #include <cstdlib>
+#include <chrono>
 #ifdef _OPENMP
     #include <omp.h>
 #endif
@@ -147,7 +148,6 @@ public:
         }
         
         int row,col, thread_id;
-        // #pragma omp parallel for num_threads(thread_count)  private(row, col, thread_id) shared(config, N,initial_rand_nums) default (none)
         #pragma omp for private(row, col)
         for ( row=0; row<N; row++){
             // thread_id = omp_get_thread_num();
@@ -184,7 +184,7 @@ public:
                 if (step%output_freq==0|| step==nsteps-1) {
                     Calculate_energy();
                     Calculate_magnetization();
-                    #pragma omp single
+                    #pragma omp single  
                     {
                         Dump();             // Writing Dump file
                         Log();              // Writing Logfile
@@ -192,7 +192,6 @@ public:
                     
                         }
                     }
-                #pragma omp barrier
                 #pragma omp single
                 {
                     step++;
@@ -357,8 +356,11 @@ int main(int argn, char* argv[]){
     printf("Read the cmd arg 1\n");
     // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
+    auto start_time = std::chrono::high_resolution_clock::now();
     ising_sim->Run();     // Running the simulation
-
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    std::cout<<"Thread count: "<<thread_count<<" --> Time taken: "<<duration.count()<<" seconds\n";
     delete ising_sim;     
     return 0;
 }

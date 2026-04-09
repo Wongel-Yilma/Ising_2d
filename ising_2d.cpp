@@ -12,6 +12,7 @@
 #include <cstring>
 #include <random>
 #include <cstdlib>
+#include <chrono>
 
 class Ising
 {
@@ -284,7 +285,11 @@ int main(int argn, char* argv[]){
     double energy, mag;
     // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
+    auto start_time = std::chrono::high_resolution_clock::now();
     ising_sim->Run();     // Running the simulation
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    std::cout<<"Time taken: "<<duration.count()<<" seconds\n";
 
     delete ising_sim;     
     return 0;
