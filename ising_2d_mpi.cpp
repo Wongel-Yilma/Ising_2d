@@ -12,7 +12,7 @@
 #include <cstring>
 #include <random>
 #include <cstdlib>
-#include<mpi.h>
+#include <mpi.h>
 
 class Ising
 {
@@ -24,7 +24,11 @@ public:
     double temp;  
     double total_energy;
     double magnetization;
+    double local_energy;
+    double local_magnetization;
     int step;
+    int local_N = N/size;
+    int * local_config;
     int* config;
     int* initial_rand_nums;
     double* rand_nums;
@@ -56,8 +60,8 @@ public:
         std::string input_file = arg[1];
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
-        int up    = (rank - 1 + size) % size;
-        int down  = (rank + 1) % size;
+        up    = (rank - 1 + size) % size;
+        down  = (rank + 1) % size;
         if (rank==0){
             Read_input_file(input_file);
             Setup_simulation();
@@ -160,8 +164,7 @@ public:
         lower_ghost = new int [N];
 
         local_rn_gen.seed(base_seed+rank);
-        int local_N = N/size;
-        int * local_config;
+    
         local_config = new int [local_N*N];
         
         int row,col;
@@ -170,43 +173,14 @@ public:
                 local_config[row*N+col] = (spin_distr(local_rn_gen) == 0) ? -1 : 1;
             }
         }
-        // std::cout<<"Processor "<<rank<<" is here "<<local_config[0]<<std::endl;
-        // MPI_Gather(local_config, N*local_N, MPI_INT, config, N*local_N,MPI_INT, 0, MPI_COMM_WORLD);
-        // if (rank ==0)
-        // {
-        //     std::cout<<"Global Processor "<<rank<<" is here "<<config[0]<<std::endl;
-        //     Calculate_magnetization();
-        //     Dump();
-        //     std::cout<<"Initial magnetization: "<<magnetization<<" \n";
-        // }
-        MPI_Status lower_comm_status;
-        
-        // Sending from even ranks
-        if ((rank%2)==0)
-        // {
-        //     MPI_Send(&local_config[0], N, MPI_INT, up, 0,MPI_COMM_WORLD);
-        //     MPI_Recv(lower_ghost, N, MPI_INT, down, 0, MPI_COMM_WORLD, &lower_comm_status);
-        // }
-        // else{
-        //     MPI_Recv(lower_ghost, N, MPI_INT, down, 0, MPI_COMM_WORLD, &lower_comm_status);
-        //     MPI_Send(&local_config[0], N, MPI_INT, up,0,MPI_COMM_WORLD);
-        // }
+        int local_sum = 0;
+        for (int k=0; k<N; k++) local_sum+= local_config[(local_N-1)*N+k];
+        std::cout<<"Rank "<< rank <<" ;local sum "<<local_sum<<std::endl;
+       
 
-        // Sending from odd ranks
-        // if ((rank%2)==1)
-        // {
-        // }
-        // else{
-        // }
-        MPI_Sendrecv(&local_config[0], N, MPI_INT, up, 0, lower_ghost, N, MPI_INT, down, 0, MPI_COMM_WORLD, &lower_comm_status);
-        int actual_count;
-        MPI_Get_count(&lower_comm_status, MPI_INT, &actual_count);
-        std::cout<<"Process "<< rank <<" has count "<< actual_count<<std::endl;
-        
-        
-        // MPI_Status upper_comm_status;
-        // int upper_disp = (local_N-1)*N;
-        // MPI_Sendrecv(&local_config[upper_disp], N, MPI_INT, down, 1, upper_ghost, N, MPI_INT, rank, 1, MPI_COMM_WORLD, &upper_comm_status);
+        int ghost_sum = 0;
+        for (int k=0; k<N; k++) ghost_sum+= upper_ghost[k];
+        std::cout<<"Rank "<< rank <<" ;ghost sum "<<ghost_sum<<std::endl;
     }
     void Run(){
         /*
@@ -218,11 +192,15 @@ public:
         for (step=0; step<nsteps; step++){
             MC_Move();
             if (step%output_freq==0|| step==nsteps-1) {
-                Dump();             // Writing Dump file
                 Calculate_energy();
                 Calculate_magnetization();
-                Log();              // Writing Logfile
-                Print_progress();   // Printing progress to the console
+                MPI_Gather(local_config, local_N*N, MPI_INT, config, local_N*N, MPI_INT, 0, MPI_COMM_WORLD);
+                if (rank ==0)
+                {
+                    Dump();             // Writing Dump file
+                    Log();              // Writing Logfile
+                    Print_progress();   // Printing progress to the console
+                }
             }
         }
     }
@@ -236,21 +214,29 @@ public:
         Checkerboard update --> Consistent with the openmp implementation
         */
         std::uniform_real_distribution<double> real_distr(0.0, 1.0);
-        for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
+        for (int i=0; i<local_N*N; i++) rand_nums[i] = real_distr(gen);
         int phase, row, col, spin, neigh_sum, start_idx;
         double rn, ediff;
 
         // Phase 1 loop
         for (phase=0; phase<2; phase++){
-            for (row=0; row<N; row++){
+
+            for (row=0; row<local_N; row++){
                 // phase = 0;
                 start_idx = (row+phase)%2;
                 for(col=start_idx; col<N; col+=2){
-                    spin = config[row*N+col];
-                    neigh_sum = config[((row-1+N)%N)*N+col] + 
-                                config[N*((row+1)%N)+col] + 
-                                config[row*N+(col-1+N)%N] + 
-                                config[row*N+(col+1)%N];
+                    spin = local_config[row*N+col];
+                    neigh_sum = local_config[row*N+(col-1+N)%N] + 
+                                local_config[row*N+(col+1)%N];
+                    if (row==0){
+                        neigh_sum += upper_ghost[col] + local_config[(row+1)*N+col];
+                    }
+                    else if (row==local_N-1){
+                        neigh_sum += lower_ghost[col] + local_config[(row-1)*N+col];
+                    }
+                    else{
+                        neigh_sum += local_config[(row-1)*N+col]+local_config[(row+1)*N+col];
+                    }
                     // rn = real_distr(gen);
                     rn = rand_nums[row*N+col];
                     ediff = static_cast<double>(2*spin*neigh_sum);
@@ -261,11 +247,19 @@ public:
                         spin*=-1;
                     }
                     config[row*N+col]=spin;
-                }   
+                } 
+                std::cout<<"Rank"<<rank  <<std::endl;
+                Comm();
             }
         }
         
     }    
+    void Comm(){
+        MPI_Sendrecv(&local_config[0], N, MPI_INT, up, 0, lower_ghost, N,
+                        MPI_INT, down, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Sendrecv(&local_config[(local_N-1)*N], N, MPI_INT, down, 0, upper_ghost, N,
+                                MPI_INT, up, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
 
     void Print_progress(){
         printf("Step: %d ; Energy: %.2f ; Mag: %.2f \n", step, total_energy, magnetization);
@@ -277,18 +271,26 @@ public:
             Hamiltonian is higher if the spin of neighboring sites are similar
         */
         int row, col, spin, neigh_sum;
-        total_energy=0.0;   
-        for ( row=0; row<N; row++){
+        local_energy=0.0;   
+        for ( row=0; row<local_N; row++){
             for ( col=0; col<N; col++){
-                spin = config[row*N+col];
-                neigh_sum = config[N*((row-1+N)%N)+col] + 
-                            config[N*((row+1)%N)+col] + 
-                            config[row*N+(col-1+N)%N] + 
-                            config[row*N + (col+1)%N];
-                total_energy+= -neigh_sum*spin;
+                spin = local_config[row*N+col];
+                neigh_sum = local_config[row*N+(col-1+N)%N] + 
+                                local_config[row*N+(col+1)%N];
+                if (row==0){
+                    neigh_sum += upper_ghost[col] + local_config[(row+1)*N+col];
+                }
+                else if (row==local_N-1){
+                    neigh_sum += lower_ghost[col] + local_config[(row-1)*N+col];
+                }
+                else{
+                    neigh_sum += local_config[(row-1)*N+col]+local_config[(row+1)*N+col];
+                }
+                local_energy+= -neigh_sum*spin;
             }
         }
-        total_energy/=2;
+        local_energy/=2;
+        MPI_Reduce(&local_energy, &total_energy, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
     }
 
     void Calculate_magnetization(){
@@ -296,10 +298,11 @@ public:
             Loops over lattice sites and calculate the sum of the spins--> Magnetization 
         */
         int i;
-        magnetization=0.0;
-        for ( i=0; i<N*N; i++){
-            magnetization+=config[i];
+        local_magnetization=0.0;
+        for ( i=0; i<local_N*N; i++){
+            local_magnetization+=local_config[i];
         }
+        MPI_Reduce(&local_magnetization, &magnetization, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
     }
 
     void Dump(){
@@ -307,6 +310,7 @@ public:
             Writes the coordinates and spins of the lattice sites to a dump file
             It can be visualized in Ovito software.
         */
+
 
         // Writing the header part of the output dump file
         fp<<"ITEM: TIMESTEP\n";
