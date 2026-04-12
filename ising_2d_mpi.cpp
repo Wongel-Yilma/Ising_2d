@@ -30,8 +30,10 @@ public:
     int local_N ;
     int * local_config;
     int* config;
-    int* initial_rand_nums;
-    float* rand_nums;
+    int* global_initial_rand_nums;
+    int* local_initial_rand_nums;
+    float* local_rand_nums;
+    float* global_rand_nums;
     int base_seed;
     int rank; 
     int size;
@@ -47,7 +49,7 @@ public:
     std::ofstream fp;
     std::ofstream logfp;
     std::string columns ="id type x y z s";
-    std::mt19937 local_rn_gen;
+    // std::mt19937 local_rn_gen;
 
     // Class constructor  --> Uses the input file provided by the user
     Ising(int narg, char**arg){
@@ -68,7 +70,7 @@ public:
         
         MPI_Bcast(&base_seed, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(&temp, 1, MPI_float, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&temp, 1, MPI_FLOAT, 0, MPI_COMM_WORLD);
         MPI_Bcast(&nsteps, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(&output_freq, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -78,7 +80,15 @@ public:
         fp.close();
         logfp.close();
         delete[] local_config;
-        if (rank==0) delete [] config;
+        delete[] local_initial_rand_nums;
+        delete[] local_rand_nums;
+        delete[] upper_ghost;
+        delete[] lower_ghost;
+        if (rank==0) {
+            delete [] config;
+            delete [] global_initial_rand_nums;
+            delete [] global_rand_nums;
+        }
     }
     void Read_input_file(std::string input_file_name){
         /*
@@ -146,9 +156,9 @@ public:
         */
         
         config  = new int[N*N];             // Allocates heap memory 
-        
-        
-        // gen.seed(base_seed);                     // Sets the random seed based on the user provided value
+        global_initial_rand_nums = new int[N*N];
+        global_rand_nums = new float[N*N];
+        gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
         logfp.open(log_file_name, std::ios::out);
 
@@ -157,34 +167,44 @@ public:
     void Initialize(){
         /*
             Initializing the Spin using random numbers --> Simulating higher temperature
-            Loops oMPI_ver all the lattice sites and assign spin values randomly.
+            Loops over all the lattice sites and assign spin values randomly.
         */
         step=0;
-        std::uniform_int_distribution<int>spin_distr(0,1);
-        // for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
         local_N = N/size;
-        initial_rand_nums = new int[local_N*N];
-        rand_nums = new float[local_N*N];
+        local_initial_rand_nums = new int[local_N*N];
+        local_rand_nums = new float[local_N*N];
         upper_ghost = new int [N];
         lower_ghost = new int [N];
         local_config = new int [local_N*N];
-        local_rn_gen.seed(base_seed+rank);
+
+        if (rank==0) {
+            std::uniform_int_distribution<int> spin_distr(0,1);
+            for (int i=0; i<N*N; i++)   global_initial_rand_nums[i] = spin_distr(gen);
+        }
+
+        MPI_Scatter(global_initial_rand_nums, local_N*N, MPI_INT, local_initial_rand_nums, local_N*N, MPI_INT, 0, MPI_COMM_WORLD);
+        
+        // std::uniform_int_distribution<int>spin_distr(0,1);
+        // for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
+        // local_rn_gen.seed(base_seed+rank);
 
         
-        int row,col;
+        int row, col;
         for ( row=0; row<local_N; row++){
             for ( col=0; col<N; col++){
-                local_config[row*N+col] = (spin_distr(local_rn_gen) == 0) ? -1 : 1;
+                // local_config[row*N+col] = (spin_distr(local_rn_gen) == 0) ? -1 : 1;
+                local_config[row*N+col] = (local_initial_rand_nums[row*N+col] == 0) ? -1 : 1;
             }
         }
-        int local_sum = 0;
-        for (int k=0; k<N; k++) local_sum+= local_config[(local_N-1)*N+k];
+
+        // int local_sum = 0;
+        // for (int k=0; k<N; k++) local_sum+= local_config[(local_N-1)*N+k];
         // std::cout<<"Rank "<< rank <<" ;local sum "<<local_sum<<std::endl;
        
         Comm();
         
-        int ghost_sum = 0;
-        for (int k=0; k<N; k++) ghost_sum+= upper_ghost[k];
+        // int ghost_sum = 0;
+        // for (int k=0; k<N; k++) ghost_sum+= upper_ghost[k];
         // std::cout<<"Rank "<< rank <<" ;ghost sum "<<ghost_sum<<std::endl;
     }
     void Run(){
@@ -194,9 +214,11 @@ public:
             Every output_frequency, output is logged in the dump file and log file, along with console print.
         */
 
-        for (step=0; step<nsteps; step++){
+        // for (step=0; step<nsteps; step++){
+        while (step<nsteps){
             MC_Move();
-            if (step%output_freq==0|| step==nsteps-1) {
+            step++;
+            if (step%output_freq==0|| step==nsteps) {
                 Calculate_energy();
                 Calculate_magnetization();
                 MPI_Gather(local_config, local_N*N, MPI_INT, config, local_N*N, MPI_INT, 0, MPI_COMM_WORLD);
@@ -218,17 +240,22 @@ public:
 
         Checkerboard update --> Consistent with the openmp implementation
         */
-        std::uniform_real_distribution<float> real_distr(0.0, 1.0);
-        for (int i=0; i<local_N*N; i++) rand_nums[i] = real_distr(local_rn_gen);
+
+        if (rank==0){
+            std::uniform_real_distribution<float> real_distr(0.0, 1.0);
+            for (int i=0; i<N*N; i++)   global_rand_nums[i] = real_distr(gen);
+        }
+        MPI_Scatter(global_rand_nums, local_N*N, MPI_FLOAT, local_rand_nums, local_N*N, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        // std::uniform_real_distribution<float> real_distr(0.0, 1.0);
+        // for (int i=0; i<local_N*N; i++) rand_nums[i] = real_distr(local_rn_gen);
         int phase, row, col, spin, neigh_sum, start_idx;
         float rn, ediff;
 
-        // Phase 1 loop
         for (phase=0; phase<2; phase++){
 
             for (row=0; row<local_N; row++){
                 // phase = 0;
-                start_idx = (row+phase)%2;
+                start_idx = (rank*local_N+row+phase)%2;
                 for(col=start_idx; col<N; col+=2){
                     spin = local_config[row*N+col];
                     neigh_sum = local_config[row*N+(col-1+N)%N] + 
@@ -243,7 +270,7 @@ public:
                         neigh_sum += local_config[(row-1)*N+col]+local_config[(row+1)*N+col];
                     }
                     // rn = real_distr(gen);
-                    rn = rand_nums[row*N+col];
+                    rn = local_rand_nums[row*N+col];
                     ediff = static_cast<float>(2*spin*neigh_sum);
                     if (ediff<0){
                         spin*=-1;
@@ -294,7 +321,7 @@ public:
             }
         }
         local_energy/=2;
-        MPI_Reduce(&local_energy, &total_energy, 1, MPI_float , MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&local_energy, &total_energy, 1, MPI_FLOAT , MPI_SUM, 0, MPI_COMM_WORLD);
     }
 
     void Calculate_magnetization(){
@@ -306,7 +333,7 @@ public:
         for ( i=0; i<local_N*N; i++){
             local_magnetization+=local_config[i];
         }
-        MPI_Reduce(&local_magnetization, &magnetization, 1, MPI_float , MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&local_magnetization, &magnetization, 1, MPI_FLOAT , MPI_SUM, 0, MPI_COMM_WORLD);
     }
 
     void Dump(){
