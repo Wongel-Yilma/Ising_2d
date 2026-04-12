@@ -21,13 +21,13 @@ private:
 public:
     // Variable definition to run the Ising simulation
     int N, nsteps;       
-    double temp;  
-    double total_energy;
-    double magnetization;
+    float temp;  
+    float total_energy;
+    float magnetization;
     int step;
     int* config;
     int* initial_rand_nums;
-    double* rand_nums;
+    float* rand_nums;
     int base_seed;
 
     // Variable definintions for dump and log outputs
@@ -117,7 +117,7 @@ public:
         */
         config  = new int[N*N];             // Allocates heap memory on 
         initial_rand_nums = new int[N*N];
-        rand_nums = new double[N*N];
+        rand_nums = new float[N*N];
         gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
         logfp.open(log_file_name, std::ios::out);
@@ -149,12 +149,14 @@ public:
         */
         Initialize();
         printf("Initilized configs\n");
-        for (step=0; step<nsteps; step++){
+        // for (step=0; step<nsteps; step++){
+        while (step<nsteps){
             MC_Move();
+            step++;
             if (step%output_freq==0|| step==nsteps-1) {
-                Dump();             // Writing Dump file
                 Calculate_energy();
                 Calculate_magnetization();
+                Dump();             // Writing Dump file
                 Log();              // Writing Logfile
                 Print_progress();   // Printing progress to the console
             }
@@ -169,10 +171,10 @@ public:
 
         Checkerboard update --> Consistent with the openmp implementation
         */
-        std::uniform_real_distribution<double> real_distr(0.0, 1.0);
+        std::uniform_real_distribution<float> real_distr(0.0, 1.0);
         for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
         int phase, row, col, spin, neigh_sum, start_idx;
-        double rn, ediff;
+        float rn, ediff;
 
         // Phase 1 loop
         for (phase=0; phase<2; phase++){
@@ -187,11 +189,8 @@ public:
                                 config[row*N+(col+1)%N];
                     // rn = real_distr(gen);
                     rn = rand_nums[row*N+col];
-                    ediff = static_cast<double>(2*spin*neigh_sum);
-                    if (ediff<0){
-                        spin*=-1;
-                    }
-                    else if (rn< exp(-ediff/temp)){
+                    ediff = static_cast<float>(2*spin*neigh_sum);
+                    if (ediff<0|| rn< exp(-ediff/temp)){
                         spin*=-1;
                     }
                     config[row*N+col]=spin;
@@ -282,7 +281,7 @@ int main(int argn, char* argv[]){
         return 1;
     }
     std::string input_file = argv[1];
-    double energy, mag;
+    float energy, mag;
     // Creating a simulation object
     Ising*  ising_sim = new Ising(input_file);
     auto start_time = std::chrono::high_resolution_clock::now();

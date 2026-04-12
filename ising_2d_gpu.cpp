@@ -13,7 +13,7 @@
 #include <random>
 #include <cstdlib>
 
-extern "C" void launch_kernel_ising(int * input_config, int * output_config, float *rand_nums, int N, float temp);
+extern "C" void launch_kernel_ising(int * input_config, int * output_config, int N, float temp, int nsteps, std::mt19937 *gen);
 
 class Ising
 {
@@ -30,7 +30,7 @@ public:
     int* config_cpy;
     int size_config ;
     int* initial_rand_nums;
-    float* rand_nums;
+    // float* rand_nums;
     int base_seed;
 
 
@@ -54,6 +54,8 @@ public:
         fp.close();
         logfp.close();
         delete[] config;
+        delete[] config_cpy;
+        delete[] initial_rand_nums;
     }
     void Read_input_file(std::string input_file_name){
         /*
@@ -122,7 +124,7 @@ public:
         config  = new int[N*N];             // Allocates heap memory on 
         config_cpy = new int[N*N];
         initial_rand_nums = new int[N*N];
-        rand_nums = new float[N*N];
+        // rand_nums = new float[N*N];
         size_config = N*N*sizeof(int);
         gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
@@ -155,15 +157,15 @@ public:
         */
         Initialize();
         printf("Initilized configs\n");
-        for (step=0; step<nsteps; step++){
+        
+        while (step<nsteps){
             MC_Move();
-            if (step%output_freq==0|| step==nsteps-1) {
-                Dump();             // Writing Dump file
-                Calculate_energy();
-                Calculate_magnetization();
-                Log();              // Writing Logfile
-                Print_progress();   // Printing progress to the console
-            }
+            step+=output_freq;  
+            Calculate_energy();
+            Calculate_magnetization();
+            Dump();             // Writing Dump file
+            Log();              // Writing Logfile
+            Print_progress();   // Printing progress to the console
         }
     }
     
@@ -175,11 +177,12 @@ public:
 
         Checkerboard update --> Consistent with the openmp implementation
         */
-        std::uniform_real_distribution<float> real_distr(0.0, 1.0);
-        for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
+        // std::uniform_real_distribution<float> real_distr(0.0, 1.0);
+        // for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
 
-        launch_kernel_ising(config, config_cpy,rand_nums, N, temp);
-        memcpy(config,config_cpy, size_config);
+        launch_kernel_ising(config, config_cpy, N, temp, output_freq, &gen);
+        std::swap(config, config_cpy);
+        // memcpy(config,config_cpy, size_config);
         // int sum = 0;
         // for (int i=0; i< N*N; i++) sum+= config_cpy[i];
         // printf("Total sum in the C++ file %d\n", sum);

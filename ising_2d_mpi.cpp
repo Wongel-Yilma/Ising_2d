@@ -21,17 +21,17 @@ private:
 public:
     // Variable definition to run the Ising simulation
     int N, nsteps;       
-    double temp;  
-    double total_energy;
-    double magnetization;
-    double local_energy;
-    double local_magnetization;
+    float temp;  
+    float total_energy;
+    float magnetization;
+    float local_energy;
+    float local_magnetization;
     int step;
     int local_N ;
     int * local_config;
     int* config;
     int* initial_rand_nums;
-    double* rand_nums;
+    float* rand_nums;
     int base_seed;
     int rank; 
     int size;
@@ -68,7 +68,7 @@ public:
         
         MPI_Bcast(&base_seed, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(&temp, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&temp, 1, MPI_float, 0, MPI_COMM_WORLD);
         MPI_Bcast(&nsteps, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(&output_freq, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -164,7 +164,7 @@ public:
         // for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
         local_N = N/size;
         initial_rand_nums = new int[local_N*N];
-        rand_nums = new double[local_N*N];
+        rand_nums = new float[local_N*N];
         upper_ghost = new int [N];
         lower_ghost = new int [N];
         local_config = new int [local_N*N];
@@ -218,10 +218,10 @@ public:
 
         Checkerboard update --> Consistent with the openmp implementation
         */
-        std::uniform_real_distribution<double> real_distr(0.0, 1.0);
+        std::uniform_real_distribution<float> real_distr(0.0, 1.0);
         for (int i=0; i<local_N*N; i++) rand_nums[i] = real_distr(local_rn_gen);
         int phase, row, col, spin, neigh_sum, start_idx;
-        double rn, ediff;
+        float rn, ediff;
 
         // Phase 1 loop
         for (phase=0; phase<2; phase++){
@@ -244,7 +244,7 @@ public:
                     }
                     // rn = real_distr(gen);
                     rn = rand_nums[row*N+col];
-                    ediff = static_cast<double>(2*spin*neigh_sum);
+                    ediff = static_cast<float>(2*spin*neigh_sum);
                     if (ediff<0){
                         spin*=-1;
                     }
@@ -294,7 +294,7 @@ public:
             }
         }
         local_energy/=2;
-        MPI_Reduce(&local_energy, &total_energy, 1, MPI_DOUBLE , MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&local_energy, &total_energy, 1, MPI_float , MPI_SUM, 0, MPI_COMM_WORLD);
     }
 
     void Calculate_magnetization(){
@@ -306,7 +306,7 @@ public:
         for ( i=0; i<local_N*N; i++){
             local_magnetization+=local_config[i];
         }
-        MPI_Reduce(&local_magnetization, &magnetization, 1, MPI_DOUBLE , MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(&local_magnetization, &magnetization, 1, MPI_float , MPI_SUM, 0, MPI_COMM_WORLD);
     }
 
     void Dump(){

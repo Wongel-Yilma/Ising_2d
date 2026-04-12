@@ -25,13 +25,13 @@ private:
 public:
     // Variable definition to run the Ising simulation
     int N, nsteps;       
-    double temp;  
-    double total_energy;
-    double magnetization;
+    float temp;  
+    float total_energy;
+    float magnetization;
     int step;
     int* config;
     int* initial_rand_nums;
-    double* rand_nums;
+    float* rand_nums;
     int base_seed;
     // std::vector<std::mt19937> rn_generators;
 
@@ -125,7 +125,7 @@ public:
         //     rn_generators[k].seed(base_seed+k);
         // }
         initial_rand_nums = new int[N*N];
-        rand_nums = new double[N*N];
+        rand_nums = new float[N*N];
         gen.seed(base_seed);                     // Sets the random seed based on the user provided value
         fp.open(dump_file_name, std::ios::out);
         logfp.open(log_file_name, std::ios::out);
@@ -220,13 +220,13 @@ public:
         // std::uniform_int_distribution<int> int_distr(0,N-1);
 
         int row, col, spin,  neigh_sum;
-        double ediff;
+        float ediff;
         // int thread_id;
         int phase, start_idx;
-        double rn;
+        float rn;
         #pragma omp single
         {
-            std::uniform_real_distribution<double> real_distr(0.0, 1.0);
+            std::uniform_real_distribution<float> real_distr(0.0, 1.0);
             for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
         }
 
@@ -249,7 +249,7 @@ public:
                             config[row*N+(col+1)%N];
                 // rn = real_distr(local_gen);
                 rn = rand_nums[row*N+col];
-                ediff = static_cast<double>(2*spin*neigh_sum);
+                ediff = static_cast<float>(2*spin*neigh_sum);
                 if (ediff<0){
                     spin*=-1;
                 }
