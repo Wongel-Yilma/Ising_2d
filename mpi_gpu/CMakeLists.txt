@@ -14,11 +14,6 @@ endif()
 find_package(MPI REQUIRED COMPONENTS CXX)
 find_package(CUDAToolkit REQUIRED)
 
-# Plain GPU binary (optional — remove if you do not need it)
-add_executable(ising_2d_gpu ising_2d_gpu.cpp kernel_ising.cu)
-target_compile_options(ising_2d_gpu PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -O2>)
-set_target_properties(ising_2d_gpu PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-
 # MPI + GPU: kernel launch lives in gpu_ising.cpp → compile as CUDA
 set(GPU_ISING_SRC gpu_ising.cpp)
 set_source_files_properties(${GPU_ISING_SRC} PROPERTIES LANGUAGE CUDA)
