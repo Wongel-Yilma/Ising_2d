@@ -378,10 +378,6 @@ public:
 };
 
 int main(int argn, char** argv){
-    // if (argn!=2){
-    //     std::cerr<<"Input file required\n";
-    //     return 1;
-    // }
 
     MPI_Init(&argn, &argv); // This is making everything MPI
 

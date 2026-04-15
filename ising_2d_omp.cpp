@@ -163,6 +163,7 @@ public:
         }
 
     }
+
     void Run(){
         /*
             This function runs the simulation from step 0 to nsteps  (defined by the user input)
@@ -176,12 +177,17 @@ public:
            #pragma omp single
            {
                printf("Initilized configs\n");
+               step = 0;
+               Log();
+               Print_progress();
            }
-           step = 0;
-        //    for (step=0; step<nsteps; step++){
             while (step<nsteps){
                 MC_Move();
-                if (step%output_freq==0|| step==nsteps-1) {
+                #pragma omp single
+                {
+                    step++;
+                }
+                if (step%output_freq==0|| step==nsteps) {
                     Calculate_energy();
                     Calculate_magnetization();
                     #pragma omp single  
@@ -190,11 +196,7 @@ public:
                         Log();              // Writing Logfile
                         Print_progress();   // Printing progress to the console
                     
-                        }
                     }
-                #pragma omp single
-                {
-                    step++;
                 }
             }
         }

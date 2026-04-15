@@ -26,22 +26,22 @@ __global__ void mcMoveKernel(int *input_config_d, int * output_config_d,float * 
 
     // Load the spin and random number into the shared memory
     if (row>=0 && row<N && col>=0 && col<N){   // Reads from the global memory into the shared memory for inner sites
-        input_ds[tx][ty] = input_config_d[((row+N)%N)*N+((col+N)%N) ];
+        input_ds[ty][tx] = input_config_d[((row+N)%N)*N+((col+N)%N) ];
     }  
     else if(row==-1){  //  Halo sites at the upper boundary (row=-1)
-        input_ds[tx][ty] = input_config_d[((N+row)%N)*N+((col+N)%N)];
+        input_ds[ty][tx] = input_config_d[((N+row)%N)*N+((col+N)%N)];
     }
     else if(row==N){  //  Halo sites at the lower boundary (row=N)
-        input_ds[tx][ty] = input_config_d[(col+N)%N];
+        input_ds[ty][tx] = input_config_d[(col+N)%N];
     }
     else if(col==-1){  //  Halo sites at the left boundary (col=-1)
-        input_ds[tx][ty] = input_config_d[((row+N)%N)*N+(N+col)%N];
+        input_ds[ty][tx] = input_config_d[((row+N)%N)*N+(N+col)%N];
     }
     else if(col==N){  //  Halo sites at the right boundary (col=N)
-        input_ds[tx][ty] = input_config_d[((row+N)%N)*N];
+        input_ds[ty][tx] = input_config_d[((row+N)%N)*N];
     }
     else{ // Halo sites at the corners
-        input_ds[tx][ty] = 0;
+        input_ds[ty][tx] = 0;
     }
     __syncthreads();
 
@@ -49,8 +49,8 @@ __global__ void mcMoveKernel(int *input_config_d, int * output_config_d,float * 
     if (tx > 0 && tx <=  TILE_SIZE && ty>0 &&ty <=TILE_SIZE){  // Threads reading Halo sites do not participate in spin calculations
         if (row< N && col <N && (row+col)%2==phase){  // Guard to prevent memory access that is out of bounds
             float rn = rand_nums_d[row*N+col];  
-            int spin = input_ds[tx][ty];
-            int neigh_sum = input_ds[tx-1][ty] + input_ds[tx+1][ty] + input_ds[tx][ty-1] + input_ds[tx][ty+1];
+            int spin = input_ds[ty][tx];
+            int neigh_sum = input_ds[ty-1][tx] + input_ds[ty+1][tx] + input_ds[ty][tx-1] + input_ds[ty][tx+1];
             float ediff = 2.0f*spin*neigh_sum;
             if (ediff<0.0|| rn< expf(-ediff/temp)  ){
                 spin*=-1;
@@ -69,7 +69,7 @@ inline cudaError_t checkCuda(cudaError_t result){
     return result;
 }
 
-extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h, int N, float temp, int nsteps, std::mt19937 &gen){
+extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h, int N, float temp, int nsteps, std::mt19937 *gen_ptr){
     
     int threadsPerBlock = BLOCK_SIZE;
     int config_size = N*N*sizeof(int);
@@ -103,7 +103,7 @@ extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h,
     std::uniform_real_distribution<float> real_distr(0.0, 1.0);
 
     for (int s=0; s<nsteps; s++){
-        for (int i=0; i<N*N; i++) rand_nums_h[i] = real_distr(gen);
+        for (int i=0; i<N*N; i++) rand_nums_h[i] = real_distr(*gen_ptr); 
         checkCuda(cudaMemcpy(rand_nums_d, rand_nums_h, rn_size, cudaMemcpyHostToDevice));
         /*
             Phase 0
@@ -119,7 +119,8 @@ extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h,
         mcMoveKernel<<<DimGrid, DimBlock>>>(input_config_d, output_config_d, rand_nums_d, N, temp, 1);
         checkCuda(cudaGetLastError());
         checkCuda(cudaDeviceSynchronize());
-        std::swap(input_config_d, output_config_d);
+        // std::swap(input_config_d, output_config_d);
+        checkCuda(cudaMemcpy(input_config_d, output_config_d, config_size, cudaMemcpyDeviceToDevice));
 
     }
     checkCuda(cudaMemcpy(output_config_h, input_config_d, config_size, cudaMemcpyDeviceToHost));

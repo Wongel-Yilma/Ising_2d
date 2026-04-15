@@ -233,6 +233,15 @@ public:
         */
 
         // for (step=0; step<nsteps; step++){
+        Initialize();
+        Calculate_energy();
+        Calculate_magnetization();
+        if (rank==0){
+            Log();
+            Print_progress();
+            Dump();
+        }
+
         while (step<nsteps){
             MC_Move( output_freq);
             step += output_freq;
@@ -390,7 +399,6 @@ int main(int argn, char** argv){
 
     // Creating a simulation object
     Ising*  ising_sim = new Ising(argn, argv);
-    ising_sim->Initialize();     // Running the simulation
     ising_sim->Run();
     delete ising_sim;    
     MPI_Finalize();
