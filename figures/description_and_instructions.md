@@ -10,7 +10,7 @@ salloc -n <number of tasks> -N <number of nodes> -t <time> -p <partition> -A <Ac
 
 # ising_2d (serial)
 
-The serial implementation of this project acts as the groundwork for any kind of parallelization in subsequent implementations. The method that we chose is commonly known as the mote carlo method. Therefore, the foundational logic outlined in this implementation also applies to the parallelized versions. This implementation is simply a barebones approach to work off of. In this implementation, the program simply loops over each lattice site. If the difference in energy before and after a flip is less than 0, then we flip. if it is greater than 0, then we flip only if a random number r is less than e^-EDiff/T.
+The serial implementation of this project acts as the groundwork for any kind of parallelization in subsequent implementations. The method that we chose is commonly known as the mote carlo method. Therefore, the foundational logic outlined in this implementation also applies to the parallelized versions. This implementation is simply a barebones approach to work off of. In this implementation, the program simply loops over every other lattice site. If the difference in energy before and after a flip is less than 0, then we flip. if it is greater than 0, then we flip only if a random number r is less than e^-EDiff/T. We then need to do this to the other portion of lattice sites that were left out.
 
 **execution flow**
 
@@ -142,3 +142,20 @@ At output intervals, all local lattices are collected using MPI_Gather, and rank
 Finally, after all time steps are completed, memory is freed, MPI is finalized, and the program terminates.
 
 **Running in CHPC**
+
+In CHPC you start by loading modules:
+
+```
+module load gcc
+module load cuda
+module load openmpi
+```
+
+You can then create 1 build using both nvcc and mpicxx:
+
+```
+nvcc -ccbin mpicxx -O3 \
+    ising_2d_mpi_gpu.cpp \
+    kernel_ising_mpi.cu \
+    -o ising_gpu
+```
