@@ -1,8 +1,8 @@
 # 🧲 2D Ising Model: Serial, OpenMP, MPI, and GPU Implementations
 
-## 📌 Introduction
+## Introduction
 
-This project models the equilibrium behavior of the two-dimensional Ising system using **Monte Carlo simulation techniques**. The primary focus is on **thermalization**, where the lattice evolves toward equilibrium at a given temperature.
+This project models the equilibrium behavior of the two-dimensional Ising system using **Monte Carlo simulation techniques**. The primary focus is on **thermalization** and its effect on **magnetization** of a material where the lattice evolves toward equilibrium at a given temperature.
 
 We consider a square lattice with:
 - Periodic boundary conditions  
@@ -11,7 +11,7 @@ We consider a square lattice with:
 
 ---
 
-## 🚀 Implementations
+## Implementations
 
 This repository contains **six C++ implementations** of the 2D Ising model:
 
@@ -28,7 +28,7 @@ This repository contains **six C++ implementations** of the 2D Ising model:
 
 The serial version serves as the **baseline** for all parallel implementations.
 
-## 🔬 Method
+## Method
 
 We use the **Metropolis Monte Carlo algorithm**:
 - Compute energy difference ΔE for a spin flip  
@@ -38,7 +38,7 @@ We use the **Metropolis Monte Carlo algorithm**:
 
 ---
 
-## ⚙️ Execution Flow
+## Execution Flow
 
 1. Read input parameters (N, T, steps, output frequency, seed)
 2. Initialize lattice with random spins (±1)
@@ -51,7 +51,7 @@ We use the **Metropolis Monte Carlo algorithm**:
 
 ---
 
-## ♟️ Checkerboard Update
+## Checkerboard Update
 
 To avoid dependency conflicts:
 
@@ -74,7 +74,7 @@ Parallelization introduces **race conditions** due to neighbor dependencies.
 Use the **checkerboard scheme**:
 - Ensures no two adjacent spins are updated simultaneously
 
-## ⚙️ Key Features
+## Key Features
 
 - `#pragma omp parallel` for main simulation
 - Work-sharing with `omp for`
@@ -89,13 +89,13 @@ Use the **checkerboard scheme**:
 
 This version accelerates computation using the GPU.
 
-## ⚡ Key Ideas
+## Key Ideas
 
 - Each thread handles one lattice site  
 - Uses **shared memory** for neighbor access  
 - Two kernel launches per step (checkerboard phases)
 
-## ⚙️ Execution Flow
+## Execution Flow
 
 1. Copy lattice to GPU
 2. Generate random numbers on host
@@ -111,14 +111,14 @@ This version accelerates computation using the GPU.
 
 The lattice is decomposed **row-wise across MPI ranks**.
 
-## 🔁 Communication Pattern
+## Communication Pattern
 
 - Each rank exchanges boundary rows with neighbors
 - Ring topology:
   - `up` neighbor  
   - `down` neighbor  
 
-## ⚙️ Key Steps
+## Key APIs used
 
 - `MPI_Bcast` → distribute parameters  
 - `MPI_Scatter` → distribute lattice  
@@ -132,13 +132,13 @@ The lattice is decomposed **row-wise across MPI ranks**.
 
 Combines **MPI domain decomposition** with **CUDA acceleration**.
 
-## ⚡ Key Features
+##  Key Features
 
 - Each MPI rank uses a GPU  
 - Local lattice stored on GPU  
 - Ghost rows exchanged between ranks  
 
-## 🔄 Execution Highlights
+## Execution Highlights
 
 1. MPI distributes lattice  
 2. Each rank:
@@ -146,7 +146,7 @@ Combines **MPI domain decomposition** with **CUDA acceleration**.
    - Runs CUDA kernels (checkerboard updates)  
 3. After each phase:
    - Exchange boundary rows (MPI)  
-4. Compute global observables using `MPI_Reduce`  
+4. Compute global observables using `MPI_Reduce`  after a specified output frequency
 
 ---
 
@@ -180,3 +180,8 @@ The text file ("in.input") is used to provide the parameters to run the simulati
 4. OUTPUT_FILE : specifies the name of the dump file output.
 5. OUTPUT_FREQUENCY : specifies the frequency of the dump output, log output and the print on the console.
 6. SEED : specifies the seed number for random number generator.
+
+# Performance Benchmarking
+
+- The Benchmarking is done on the modified code in the Benchmarking directory.
+- Only difference is the generation of random number is perfomed in parallel.
