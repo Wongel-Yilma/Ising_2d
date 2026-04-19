@@ -4,7 +4,9 @@
 #include <cassert>
 #include <random>
 #include <iostream>
-
+/*
+    This is where we define the tile and block sizes
+*/
 #define TILE_SIZE 16
 #define BLOCK_SIZE (TILE_SIZE+2)
 
@@ -45,17 +47,19 @@ __global__ void mcMoveKernel(int *input_config_d, int * output_config_d,float * 
     }
     __syncthreads();
 
-    // Phase 0
+    /*
+        This is where the main ising algorithm gets executed
+    */
     if (tx > 0 && tx <=  TILE_SIZE && ty>0 &&ty <=TILE_SIZE){  // Threads reading Halo sites do not participate in spin calculations
         if (row< N && col <N && (row+col)%2==phase){  // Guard to prevent memory access that is out of bounds
-            float rn = rand_nums_d[row*N+col];  
-            int spin = input_ds[ty][tx];
+            float rn = rand_nums_d[row*N+col];        // Get the randum number for the specific site
+            int spin = input_ds[ty][tx];        
             int neigh_sum = input_ds[ty-1][tx] + input_ds[ty+1][tx] + input_ds[ty][tx-1] + input_ds[ty][tx+1];
             float ediff = 2.0f*spin*neigh_sum;
-            if (ediff<0.0|| rn< expf(-ediff/temp)  ){
+            if (ediff<0.0|| rn< expf(-ediff/temp)  ){    // Perform the spin update based on the energy difference and random number
                 spin*=-1;
             }
-            output_config_d[row*N+col]= spin;
+            output_config_d[row*N+col]= spin;       // Saving the data to the output buffer
         }
     }
     
@@ -76,20 +80,24 @@ extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h,
     int rn_size = N*N*sizeof(float);
     float *rand_nums_h=NULL; 
     float *rand_nums_d=NULL;
-
-    // Creating device variables
-
+    
+    /*
+        Defining the input and output device buffers.
+    */
     int *input_config_d, *output_config_d;
 
+    // Allocating host memory for the random numbers
     rand_nums_h = (float *)malloc(rn_size);
-
-    // std::cout<<"Random numbers created on the host"<<std::endl;
-    // Allocating memory for the device variables
+    /*
+        Allocating memory for the device variables
+    */
     checkCuda(cudaMalloc((void **)&input_config_d, config_size));
     checkCuda(cudaMalloc((void **)&output_config_d, config_size));
     checkCuda(cudaMalloc((void **)&rand_nums_d, rn_size));
-    // std::cout<<"Memory allocated on the device"<<std::endl;
-    // Copying data from host to device
+
+    /*
+        Copying data from host to device
+    */
     checkCuda(cudaMemcpy(input_config_d, input_config_h, config_size, cudaMemcpyHostToDevice));
     checkCuda(cudaMemcpy(output_config_d, input_config_d, config_size, cudaMemcpyDeviceToDevice));
     
@@ -98,15 +106,15 @@ extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h,
     dim3 DimGrid(ceil(float(N)/TILE_SIZE),ceil(float(N)/TILE_SIZE),1 );
     dim3 DimBlock(threadsPerBlock, threadsPerBlock, 1);
 
-    // Executing with 2 phases --> Checkerboard scheme
-
+    // Defining the pool for the random numbers
     std::uniform_real_distribution<float> real_distr(0.0, 1.0);
-
+    
+    // Executing with 2 phases --> Checkerboard scheme
     for (int s=0; s<nsteps; s++){
         for (int i=0; i<N*N; i++) rand_nums_h[i] = real_distr(*gen_ptr); 
         checkCuda(cudaMemcpy(rand_nums_d, rand_nums_h, rn_size, cudaMemcpyHostToDevice));
         /*
-            Phase 0
+            Phase 0   --> White Sites
         */
         mcMoveKernel<<<DimGrid, DimBlock>>>(input_config_d, output_config_d, rand_nums_d, N, temp, 0);
         checkCuda(cudaGetLastError());
@@ -114,19 +122,20 @@ extern "C" void launch_kernel_ising(int * input_config_h, int * output_config_h,
         // std::swap(input_config_d, output_config_d);
         checkCuda(cudaMemcpy(input_config_d, output_config_d, config_size, cudaMemcpyDeviceToDevice));
         /*
-            Phase 1
+            Phase 1 --> Black Sites
         */
         mcMoveKernel<<<DimGrid, DimBlock>>>(input_config_d, output_config_d, rand_nums_d, N, temp, 1);
         checkCuda(cudaGetLastError());
         checkCuda(cudaDeviceSynchronize());
-        // std::swap(input_config_d, output_config_d);
+        // Copying the output memory to the input for the next iteration
         checkCuda(cudaMemcpy(input_config_d, output_config_d, config_size, cudaMemcpyDeviceToDevice));
 
     }
     checkCuda(cudaMemcpy(output_config_h, input_config_d, config_size, cudaMemcpyDeviceToHost));
-    // int sum = 0;
-    // for (int i=0; i< N*N; i++) sum+= output_config_h[i];
-    // printf("Total sum of the output in the cuda file %d\n", sum);
+
+    /*
+        Clean up operations
+    */
     checkCuda(cudaFree(input_config_d));
     checkCuda(cudaFree(output_config_d));
     checkCuda(cudaFree(rand_nums_d));

@@ -13,6 +13,8 @@
 #include <random>
 #include <cstdlib>
 
+
+// External function that launches the CUDA kernel
 extern "C" void launch_kernel_ising(int * input_config, int * output_config, int N, float temp, int nsteps, std::mt19937 *gen);
 
 class Ising
@@ -30,7 +32,6 @@ public:
     int* config_cpy;
     int size_config ;
     int* initial_rand_nums;
-    // float* rand_nums;
     int base_seed;
 
 
@@ -156,6 +157,9 @@ public:
             Every output_frequency, output is logged in the dump file and log file, along with console print.
         */
         Initialize();
+        Print_progress();
+        Log();
+        Dump();
         printf("Initilized configs\n");
         
         while (step<nsteps){
@@ -176,19 +180,19 @@ public:
         But if it is positive, it uses a random number to decide to flip it or not.
 
         Checkerboard update --> Consistent with the openmp implementation
+
+        The move update is perfomed in the kernel_ising.cu file
+        And the move is launched by the launch_kernel_ising
         */
-        // std::uniform_real_distribution<float> real_distr(0.0, 1.0);
-        // for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
 
         launch_kernel_ising(config, config_cpy, N, temp, output_freq, &gen);
         std::swap(config, config_cpy);
-        // memcpy(config,config_cpy, size_config);
-        // int sum = 0;
-        // for (int i=0; i< N*N; i++) sum+= config_cpy[i];
-        // printf("Total sum in the C++ file %d\n", sum);
     }    
 
     void Print_progress(){
+        /*
+            Printing energy magnetization values to the console.
+        */
         printf("Step: %d ; Energy: %.2f ; Mag: %.2f \n", step, total_energy, magnetization);
     }
 

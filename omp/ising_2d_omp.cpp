@@ -119,11 +119,6 @@ public:
             Using parameters provided, this method sets up the variables for the simulation
         */
         config  = new int[N*N];             // Allocates heap memory on 
-        // Create generators for each thread.
-        // rn_generators.resize(thread_count);
-        // for (int k =0; k<thread_count; k++){
-        //     rn_generators[k].seed(base_seed+k);
-        // }
         initial_rand_nums = new int[N*N];
         rand_nums = new float[N*N];
         gen.seed(base_seed);                     // Sets the random seed based on the user provided value
@@ -140,22 +135,26 @@ public:
         step=0;
         // Generating the random numbers
         // And populate an array
-        // before the parallel section 
+        // before the parallel section  --> Performed on a single thread for reproducibility
         #pragma omp single
         {
             std::uniform_int_distribution<int>spin_distr(0,1);
             for (int i=0; i<N*N; i++) initial_rand_nums[i] = spin_distr(gen);
         }
-        
+
+        /* 
+            Instantiating the initial configurations using multiple threads
+        */
         int row,col, thread_id;
-        #pragma omp for private(row, col)
+        #pragma omp for private(row, col)  
         for ( row=0; row<N; row++){
-            // thread_id = omp_get_thread_num();
-            // std::mt19937& local_gen = rn_generators[thread_id];
             for ( col=0; col<N; col++){
                 config[row*N+col] = (initial_rand_nums[row*N+col] == 0) ? -1 : 1;
             }
         }
+        /*
+            Printing out the initial magnetization value
+        */
         Calculate_magnetization();
         #pragma omp single
         {
@@ -174,12 +173,14 @@ public:
        {
 
            Initialize();
+           Calculate_energy();
            #pragma omp single
            {
                printf("Initilized configs\n");
                step = 0;
                Log();
                Print_progress();
+               Dump();
            }
             while (step<nsteps){
                 MC_Move();
@@ -226,22 +227,23 @@ public:
         // int thread_id;
         int phase, start_idx;
         float rn;
+        /*
+            Populating the random numbers for each step
+            Performed on a single thread --> Reproducibility
+        */
         #pragma omp single
         {
             std::uniform_real_distribution<float> real_distr(0.0, 1.0);
             for (int i=0; i<N*N; i++) rand_nums[i] = real_distr(gen);
         }
 
-    // #pragma omp parallel num_threads(thread_count) default(none) \
-    //                     private(row, col, neigh_sum,  ediff, rn, spin, phase, start_idx) \
-    //                     shared(config, N, rand_nums )
+    /*
+            Here is the main loop that loops throught all the sites and
+            perform flipping as per the random numbers.
+    */
     for (phase = 0; phase<2; phase++){
         #pragma omp for private(row, col, neigh_sum, ediff, spin, start_idx, rn)  //shared(N, phase, rand_nums, config)
         for (row=0; row<N; row++){
-            // thread_id = omp_get_thread_num();
-            // std::mt19937& local_gen = rn_generators[thread_id];
-            // for (phase=0; phase<2; phase++){
-            // phase = 0;
             start_idx = (phase+row)%2;
             for (col=start_idx; col<N; col+=2){
                 spin = config[row*N+col];
@@ -249,7 +251,7 @@ public:
                             config[N*((row+1)%N)+col] + 
                             config[row*N+(col-1+N)%N] + 
                             config[row*N+(col+1)%N];
-                // rn = real_distr(local_gen);
+                // Getting the random numbers from the prepopulated array
                 rn = rand_nums[row*N+col];
                 ediff = static_cast<float>(2*spin*neigh_sum);
                 if (ediff<0){
@@ -266,21 +268,21 @@ public:
     }    
 
     void Print_progress(){
+        /* 
+            Logs output to the console
+        */
         printf("Step: %d ; Energy: %.2f ; Mag: %.2f \n", step, total_energy, magnetization);
-        // for (int k=0; k<N*N;k++){
-        //     printf("%d ", config[k]);
-        // }
-        // printf("\n");
     }
 
     void Calculate_energy(){
         /*
             Loops over the whole lattice sites and calculates the Hamiltonian.
             Hamiltonian is higher if the spin of neighboring sites are similar
+            Done with multiple threads
         */
         int row, col, spin, neigh_sum;
         total_energy=0.0;  
-        #pragma omp for private(row, col, neigh_sum, spin)  reduction(+:total_energy) //shared(N,  config)
+        #pragma omp for private(row, col, neigh_sum, spin)  reduction(+:total_energy) 
         for ( row=0; row<N; row++){
             for ( col=0; col<N; col++){
                 spin = config[row*N+col];

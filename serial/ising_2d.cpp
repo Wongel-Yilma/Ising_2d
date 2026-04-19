@@ -149,11 +149,15 @@ public:
         */
         Initialize();
         printf("Initilized configs\n");
-        // for (step=0; step<nsteps; step++){
+        Calculate_energy();
+        Calculate_magnetization();
+        Dump();             // Writing Dump file
+        Log();              // Writing Logfile
+        Print_progress();   // Printing progress to the console
         while (step<nsteps){
             MC_Move();
             step++;
-            if (step%output_freq==0|| step==nsteps-1) {
+            if (step%output_freq==0|| step==nsteps) {
                 Calculate_energy();
                 Calculate_magnetization();
                 Dump();             // Writing Dump file

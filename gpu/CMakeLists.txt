@@ -6,8 +6,8 @@ project(Ising2DGPU LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Specify the CUDA architecture (sm_75)
-set(CMAKE_CUDA_ARCHITECTURES 75)
+# Specify the CUDA architecture (sm_75 or sm_86)
+set(CMAKE_CUDA_ARCHITECTURES 86)
 
 # Optionally, use separate compilation for .cu files
 # set(CMAKE_CUDA_STANDARD 14)
