@@ -71,18 +71,17 @@ To avoid dependency conflicts:
 Parallelization introduces **race conditions** due to neighbor dependencies.
 
 ## ✅ Solution
-
 Use the **checkerboard scheme**:
 - Ensures no two adjacent spins are updated simultaneously
 
 ## ⚙️ Key Features
 
-- `#pragma omp parallel` for main simulation  
-- Work-sharing with `omp for`  
+- `#pragma omp parallel` for main simulation
+- Work-sharing with `omp for`
 - Reductions for:
-  - Energy  
-  - Magnetization  
-- Single-threaded I/O to avoid conflicts  
+  - Energy
+  - Magnetization
+- Single-threaded I/O to avoid conflicts
 
 ---
 
@@ -94,17 +93,17 @@ This version accelerates computation using the GPU.
 
 - Each thread handles one lattice site  
 - Uses **shared memory** for neighbor access  
-- Two kernel launches per step (checkerboard phases)  
+- Two kernel launches per step (checkerboard phases)
 
 ## ⚙️ Execution Flow
 
-1. Copy lattice to GPU  
-2. Generate random numbers on host  
+1. Copy lattice to GPU
+2. Generate random numbers on host
 3. Launch CUDA kernels:
-   - Load tiles into shared memory  
-   - Compute ΔE and apply Metropolis rule  
-4. Copy results back to CPU  
-5. Compute observables on host  
+   - Load tiles into shared memory
+   - Compute ΔE and apply Metropolis rule
+4. Copy results back to CPU
+5. Compute observables on host
 
 ---
 
@@ -114,7 +113,7 @@ The lattice is decomposed **row-wise across MPI ranks**.
 
 ## 🔁 Communication Pattern
 
-- Each rank exchanges boundary rows with neighbors  
+- Each rank exchanges boundary rows with neighbors
 - Ring topology:
   - `up` neighbor  
   - `down` neighbor  
@@ -123,4 +122,61 @@ The lattice is decomposed **row-wise across MPI ranks**.
 
 - `MPI_Bcast` → distribute parameters  
 - `MPI_Scatter` → distribute lattice  
-- `MPI
+- `MPI_Sendrecv` → exchange ghost rows  
+- `MPI_Reduce` → compute global energy/magnetization  
+- `MPI_Gather` → reconstruct full lattice for output  
+
+---
+
+# 5. MPI + GPU (Hybrid)
+
+Combines **MPI domain decomposition** with **CUDA acceleration**.
+
+## ⚡ Key Features
+
+- Each MPI rank uses a GPU  
+- Local lattice stored on GPU  
+- Ghost rows exchanged between ranks  
+
+## 🔄 Execution Highlights
+
+1. MPI distributes lattice  
+2. Each rank:
+   - Copies data to GPU  
+   - Runs CUDA kernels (checkerboard updates)  
+3. After each phase:
+   - Exchange boundary rows (MPI)  
+4. Compute global observables using `MPI_Reduce`  
+
+---
+
+# ✅ Verification
+
+To ensure correctness, all implementations are validated against the serial version.
+
+Run:
+
+```bash
+python verify.py
+```
+
+
+# Visualization of the output
+
+In order to visualize the output from these simulations, we used Ovito software. Its free version can be downloaded from <https://www.ovito.org/>.
+Steps to visualize the dump file (dump.out).
+1. Once the ovito software is downloaded and launched, using File->Load, and navigate to the folder and select the file to be visualized (dump.out).
+2. Load the file and click on "Add modification" 
+3. Select "color coding" from the drop down menu
+4. The -1/ +1 spins are shown in different color.
+5. Use the panel on the bottom to display the configurations at different time steps.
+
+# Organization of the input file
+
+The text file ("in.input") is used to provide the parameters to run the simulation. These parameters are.
+1. N : specifies the size of the simulation.
+2. T : specifies the temperature of the simulation
+3. NSTEP: specifies the total number of steps to run the simulation.
+4. OUTPUT_FILE : specifies the name of the dump file output.
+5. OUTPUT_FREQUENCY : specifies the frequency of the dump output, log output and the print on the console.
+6. SEED : specifies the seed number for random number generator.
