@@ -9,18 +9,23 @@ We consider a square lattice with:
 - Variable lattice sizes  
 - The standard Ising Hamiltonian  
 
+<figure>
+  <img src="figures/1024x1024_25000.png" alt="Description">
+  <figcaption>Ising model at various time-steps, t = 0, t = 5000, and t = 25000.</figcaption>
+</figure>
+
 ---
 
 ## Implementations
 
 This repository contains **six C++ implementations** of the 2D Ising model:
 
-- ✅ Serial  
-- ✅ Shared Memory (OpenMP)  
-- ✅ GPU (CUDA)  
-- ✅ Distributed Memory (MPI)  
-- ✅ Distributed Memory + GPU (MPI + CUDA)  
-- ✅ GPU-aware MPI  
+✅ Serial  
+✅ Shared Memory (OpenMP)  
+✅ GPU (CUDA)  
+✅ Distributed Memory (MPI)  
+✅ Distributed Memory + GPU (MPI + CUDA)  
+✅ GPU-aware MPI  
 
 ---
 
@@ -185,3 +190,24 @@ The text file ("in.input") is used to provide the parameters to run the simulati
 
 - The Benchmarking is done on the modified code in the Benchmarking directory.
 - Only difference is the generation of random number is perfomed in parallel.
+
+## Strong scaling for MPI implementation
+
+<figure>
+  <img src="figures/mpi_strong_scaling.png" alt="Description">
+  <figcaption>Strong scaling for MPI implementation</figcaption>
+</figure>
+
+## Weak scaling for MPI implementation
+
+<figure>
+  <img src="figures/mpi_weak_scaling.png" alt="Description">
+  <figcaption>Weak scaling for MPI implementation</figcaption>
+</figure>
+
+## Impact of number of GPUs on computation time
+
+<figure>
+  <img src="figures/mpi_gpu.png" alt="Description">
+  <figcaption>Number of GPUs on computation time</figcaption>
+</figure>
